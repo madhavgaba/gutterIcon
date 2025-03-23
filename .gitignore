@@ -1,1 +1,11 @@
-./node_modules
+# Node modules
+node_modules/
+
+# Build output
+dist/
+
+# VS Code extension package
+*.vsix
+
+# Logs
+*.log

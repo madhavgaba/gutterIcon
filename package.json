@@ -11,7 +11,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:go"
+    "onLanguage:go",
+    "onLanguage:java"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -43,6 +44,16 @@
           "Go",
           "go"
         ]
+      },
+      {
+        "id": "java",
+        "extensions": [
+          ".java"
+        ],
+        "aliases": [
+          "Java",
+          "java"
+        ]
       }
     ]
   },
@@ -53,9 +64,9 @@
   },
   "devDependencies": {
     "@types/vscode": "^1.75.0",
+    "@vscode/vsce": "^2.15.0",
     "typescript": "^4.9.5",
-    "vscode": "^1.1.37",
-    "vsce": "^2.18.0"
+    "vscode": "^1.1.37"
   },
   "files": [
     "dist",
