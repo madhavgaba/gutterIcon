@@ -11,9 +11,9 @@ import {
   ExtensionContext,
   Selection,
   window,
-  TextEditor,
+  workspace,
   Uri,
-  workspace
+  Location,
 } from "vscode";
 
 interface ImplementationTarget {
@@ -23,103 +23,113 @@ interface ImplementationTarget {
   interfaceFile?: Uri;
 }
 
-/* 
- * Forward Provider: "Go to Implementations"
+/**
+ * CodeLens Provider for "Go to Implementations"
  */
-class GoImplementationCodeLensProvider implements CodeLensProvider<CodeLens> {
+class GoImplementationCodeLensProvider implements CodeLensProvider {
   // @ts-ignore
   provideCodeLenses(document: TextDocument, token: CancellationToken): ProviderResult<CodeLens[]> {
     const codeLenses: CodeLens[] = [];
     const interfaceDefRegex = /^\s*type\s+(\w+)\s+interface\s*{/;
-    const interfaceMethodRegex = /^\s*(\w+)\s*\(.*\)/;
+    const interfaceMethodRegex = /^\s*(\w+)\s*\(.*?\)/;
+
     let inInterfaceBlock = false;
     for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
-      const line = document.lineAt(lineNumber);
-      const lineText = line.text;
-      const defMatch = interfaceDefRegex.exec(lineText);
+      const line = document.lineAt(lineNumber).text;
+      
+      const defMatch = interfaceDefRegex.exec(line);
       if (defMatch) {
         const interfaceName = defMatch[1];
-        const startIndex = lineText.indexOf(interfaceName);
-        const pos = new Position(lineNumber, startIndex);
-        codeLenses.push(new CodeLens(new Range(pos, pos), {
-          title: "$(arrow-right) Go to Implementations",
-          command: "extension.goToImplementation",
-          arguments: [{ position: pos, methodName: interfaceName }]
-        }));
+        codeLenses.push(this.createCodeLens(document, lineNumber, interfaceName));
         inInterfaceBlock = true;
         continue;
       }
+
       if (inInterfaceBlock) {
-        if (/^\s*}\s*$/.test(lineText)) {
+        if (/^\s*}\s*$/.test(line)) {
           inInterfaceBlock = false;
           continue;
         }
-        const methodMatch = interfaceMethodRegex.exec(lineText);
+        const methodMatch = interfaceMethodRegex.exec(line);
         if (methodMatch) {
-          const methodName = methodMatch[1];
-          const startIndex = lineText.indexOf(methodName);
-          const pos = new Position(lineNumber, startIndex);
-          codeLenses.push(new CodeLens(new Range(pos, pos), {
-            title: "$(arrow-right) Go to Implementations",
-            command: "extension.goToImplementation",
-            arguments: [{ position: pos, methodName }]
-          }));
+          codeLenses.push(this.createCodeLens(document, lineNumber, methodMatch[1]));
         }
       }
     }
     return codeLenses;
   }
+
+  private createCodeLens(document: TextDocument, line: number, methodName: string): CodeLens {
+    const pos = new Position(line, document.lineAt(line).text.indexOf(methodName));
+    return new CodeLens(new Range(pos, pos), {
+      title: "$(symbol-method) Go to Implementations",
+      command: "extension.goToImplementation",
+      arguments: [{ position: pos, methodName }],
+    });
+  }
 }
 
-/* 
- * Reverse Provider: "Go to Interface"
- * For each implementation method (with a receiver) whose method name appears in an interface,
- * we search the document for an interface block that contains that method.
- * If found, we add a reverse CodeLens at the implementation line with the interface location.
+/**
+ * CodeLens Provider for "Go to Interface"
  */
-class GoInterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
+class GoInterfaceCodeLensProvider implements CodeLensProvider {
   // @ts-ignore
   async provideCodeLenses(document: TextDocument, token: CancellationToken): Promise<ProviderResult<CodeLens[]>> {
     const codeLenses: CodeLens[] = [];
-    // Regex for implementation methods with a receiver.
-    // Matches lines like: "func (d *Dog) Speak() string {" or "func (d Dog) Move(distance int) error {"
     const methodWithReceiverRegex = /^\s*func\s+\(\s*[\w\*\s]+\)\s+(\w+)\s*\(/;
-    // Regex for struct definitions
     const structDefRegex = /^\s*type\s+(\w+)\s+struct\s*{/;
-    
-    // Find all Go files in the workspace
-    const goFiles = await workspace.findFiles('**/*.go');
-    
-    // First, collect all interfaces and their methods
-    const interfaces = new Map<string, Map<string, string>>();
+
+    const goFiles = await workspace.findFiles("**/*.go");
+
+    // Collect all interfaces and their methods
+    const interfaces = await this.collectInterfaces(goFiles);
+
+    for (let i = 0; i < document.lineCount; i++) {
+      const lineText = document.lineAt(i).text;
+
+      // Struct detection
+      const structMatch = structDefRegex.exec(lineText);
+      if (structMatch) {
+        codeLenses.push(...(await this.processStruct(document, i, structMatch[1], interfaces, goFiles)));
+      }
+
+      // Method detection
+      const methodMatch = methodWithReceiverRegex.exec(lineText);
+      if (methodMatch) {
+        codeLenses.push(...(await this.processMethod(document, i, methodMatch[1], interfaces, goFiles)));
+      }
+    }
+    return codeLenses;
+  }
+
+  private async collectInterfaces(goFiles: Uri[]): Promise<Map<string, Set<string>>> {
+    const interfaces = new Map<string, Set<string>>();
+
     for (const file of goFiles) {
       try {
         const doc = await workspace.openTextDocument(file);
-        let currentInterface = '';
+        let currentInterface = "";
         let inInterfaceBlock = false;
-        
+
         for (let i = 0; i < doc.lineCount; i++) {
-          const line = doc.lineAt(i);
-          const text = line.text;
-          
-          const interfaceDefMatch = /^\s*type\s+(\w+)\s+interface\s*{/.exec(text);
-          if (interfaceDefMatch) {
-            currentInterface = interfaceDefMatch[1];
+          const line = doc.lineAt(i).text;
+          const match = /^\s*type\s+(\w+)\s+interface\s*{/.exec(line);
+
+          if (match) {
+            currentInterface = match[1];
+            interfaces.set(currentInterface, new Set());
             inInterfaceBlock = true;
-            interfaces.set(currentInterface, new Map());
             continue;
           }
-          
+
           if (inInterfaceBlock) {
-            if (/^\s*}\s*$/.test(text)) {
+            if (/^\s*}\s*$/.test(line)) {
               inInterfaceBlock = false;
               continue;
             }
-            
-            // Store the full method signature
-            const methodMatch = /^\s*(\w+)\s*\((.*?)\)/.exec(text);
+            const methodMatch = /^\s*(\w+)\s*\(/.exec(line);
             if (methodMatch) {
-              interfaces.get(currentInterface)?.set(methodMatch[1], methodMatch[2]);
+              interfaces.get(currentInterface)?.add(methodMatch[1]);
             }
           }
         }
@@ -127,153 +137,78 @@ class GoInterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
         console.error(`Error reading file ${file.fsPath}:`, error);
       }
     }
-    
-    // Now search for struct implementations and method implementations
-    for (let i = 0; i < document.lineCount; i++) {
-      const line = document.lineAt(i);
-      const text = line.text;
-      
-      // Check for struct definition
-      const structMatch = structDefRegex.exec(text);
-      if (structMatch) {
-        const structName = structMatch[1];
-        let structMethods = new Map<string, string>();
-        let implementedInterfaces = new Set<string>();
-        
-        // Collect all methods of this struct with their signatures
-        for (let j = i + 1; j < document.lineCount; j++) {
-          const methodLine = document.lineAt(j);
-          const methodMatch = /^\s*func\s+\(\s*[\w\*\s]+\)\s+(\w+)\s*\((.*?)\)/.exec(methodLine.text);
-          if (methodMatch) {
-            structMethods.set(methodMatch[1], methodMatch[2]);
-          }
-        }
-        
-        // Check if this struct implements any interfaces
-        for (const [interfaceName, interfaceMethods] of interfaces) {
-          // Skip if we've already added a CodeLens for this interface
-          if (implementedInterfaces.has(interfaceName)) {
-            continue;
-          }
-          
-          // Check if all interface methods are implemented with matching signatures
-          const implementsInterface = Array.from(interfaceMethods.entries()).every(([methodName, interfaceSig]) => {
-            const structSig = structMethods.get(methodName);
-            return structSig === interfaceSig;
-          });
-          
-          if (implementsInterface) {
-            // Find the interface file and position
-            for (const file of goFiles) {
-              try {
-                const doc = await workspace.openTextDocument(file);
-                let found = false;
-                
-                for (let j = 0; j < doc.lineCount; j++) {
-                  const interfaceLine = doc.lineAt(j);
-                  const interfaceMatch = /^\s*type\s+(\w+)\s+interface\s*{/.exec(interfaceLine.text);
-                  if (interfaceMatch && interfaceMatch[1] === interfaceName) {
-                    const startIndex = interfaceLine.text.indexOf(interfaceName);
-                    const interfacePos = new Position(j, startIndex);
-                    const structStartIndex = text.indexOf(structName);
-                    const structPos = new Position(i, structStartIndex);
-                    
-                    codeLenses.push(new CodeLens(new Range(structPos, structPos), {
-                      title: `$(arrow-left) Go to Interface (${interfaceName})`,
-                      command: "extension.goToInterface",
-                      arguments: [{
-                        position: structPos,
-                        methodName: interfaceName,
-                        interfaceLocation: interfacePos,
-                        interfaceFile: file
-                      }]
-                    }));
-                    
-                    implementedInterfaces.add(interfaceName);
-                    found = true;
-                    console.log(`Found interface ${interfaceName} for struct ${structName} in ${file.fsPath}`);
-                    break;
-                  }
-                }
-                
-                if (found) break;
-              } catch (error) {
-                console.error(`Error reading file ${file.fsPath}:`, error);
-              }
-            }
-          }
-        }
-      }
-      
-      // Check for method implementation
-      const methodMatch = methodWithReceiverRegex.exec(text);
+    return interfaces;
+  }
+
+  private async processStruct(
+    document: TextDocument,
+    line: number,
+    structName: string,
+    interfaces: Map<string, Set<string>>,
+    goFiles: Uri[]
+  ): Promise<CodeLens[]> {
+    const structMethods = new Set<string>();
+    for (let j = line + 1; j < document.lineCount; j++) {
+      const methodMatch = /^\s*func\s+\(\s*[\w\*\s]+\)\s+(\w+)\s*\(/.exec(document.lineAt(j).text);
       if (methodMatch) {
-        const methodName = methodMatch[1];
-        let interfaceFound = false;
-        
-        // Search through all Go files for the interface
-        for (const file of goFiles) {
-          try {
-            const doc = await workspace.openTextDocument(file);
-            const docText = doc.getText();
-            
-            // Search for interface blocks containing this method
-            const interfaceDefRegex = /^\s*type\s+(\w+)\s+interface\s*{/;
-            const interfaceMethodRegex = /^\s*(\w+)\s*\(.*\)/;
-            let inInterfaceBlock = false;
-            let currentInterfaceName = '';
-            
-            for (let j = 0; j < doc.lineCount; j++) {
-              const interfaceLine = doc.lineAt(j);
-              const interfaceText = interfaceLine.text;
-              
-              const defMatch = interfaceDefRegex.exec(interfaceText);
-              if (defMatch) {
-                currentInterfaceName = defMatch[1];
-                inInterfaceBlock = true;
-                continue;
-              }
-              
-              if (inInterfaceBlock) {
-                if (/^\s*}\s*$/.test(interfaceText)) {
-                  inInterfaceBlock = false;
-                  continue;
-                }
-                
-                const methodMatch = interfaceMethodRegex.exec(interfaceText);
-                if (methodMatch && methodMatch[1] === methodName) {
-                  // Found the interface! Create a CodeLens
-                  const startIndex = interfaceText.indexOf(methodName);
-                  const interfacePos = new Position(j, startIndex);
-                  const implStartIndex = text.indexOf(methodName);
-                  const implPos = new Position(i, implStartIndex);
-                  
-                  codeLenses.push(new CodeLens(new Range(implPos, implPos), {
-                    title: `$(arrow-left) Go to Interface (${currentInterfaceName}.${methodName})`,
-                    command: "extension.goToInterface",
-                    arguments: [{
-                      position: implPos,
-                      methodName,
-                      interfaceLocation: interfacePos,
-                      interfaceFile: file
-                    }]
-                  }));
-                  
-                  interfaceFound = true;
-                  console.log(`Found interface ${currentInterfaceName} for ${methodName} in ${file.fsPath}`);
-                  break;
-                }
-              }
+        structMethods.add(methodMatch[1]);
+      }
+    }
+
+    const matchingInterfaces = [...interfaces.entries()].filter(([_, methods]) =>
+      [...methods].every((method) => structMethods.has(method))
+    );
+
+    return this.createInterfaceCodeLenses(document, line, structName, matchingInterfaces, goFiles);
+  }
+
+  private async processMethod(
+    document: TextDocument,
+    line: number,
+    methodName: string,
+    interfaces: Map<string, Set<string>>,
+    goFiles: Uri[]
+  ): Promise<CodeLens[]> {
+    for (const [interfaceName, methods] of interfaces) {
+      if (methods.has(methodName)) {
+        return this.createInterfaceCodeLenses(document, line, methodName, [[interfaceName, methods]], goFiles);
+      }
+    }
+    return [];
+  }
+
+  private async createInterfaceCodeLenses(
+    document: TextDocument,
+    line: number,
+    methodName: string,
+    matchingInterfaces: [string, Set<string>][],
+    goFiles: Uri[]
+  ): Promise<CodeLens[]> {
+    const codeLenses: CodeLens[] = [];
+    for (const [interfaceName] of matchingInterfaces) {
+      // Find the first file containing the interface definition
+      for (const file of goFiles) {
+        try {
+          const doc = await workspace.openTextDocument(file);
+          for (let i = 0; i < doc.lineCount; i++) {
+            if (doc.lineAt(i).text.includes(`type ${interfaceName} interface`)) {
+              const interfacePos = new Position(i, doc.lineAt(i).text.indexOf(interfaceName));
+              const methodPos = new Position(line, document.lineAt(line).text.indexOf(methodName));
+              codeLenses.push(
+                new CodeLens(new Range(methodPos, methodPos), {
+                  title: "$(symbol-interface) Go to Interface",
+                  command: "extension.goToInterface",
+                  arguments: [{ position: methodPos, methodName, interfaceLocation: interfacePos, interfaceFile: file }],
+                })
+              );
+              // Break out of both loops once we find the first occurrence
+              break;
             }
-            
-            if (interfaceFound) break;
-          } catch (error) {
-            console.error(`Error reading file ${file.fsPath}:`, error);
           }
-        }
-        
-        if (!interfaceFound) {
-          console.log(`No interface found for ${methodName} at line ${i}`);
+          // If we found the interface, break out of the file loop
+          if (codeLenses.length > 0) break;
+        } catch (error) {
+          console.error(`Error reading file ${file.fsPath}:`, error);
         }
       }
     }
@@ -281,88 +216,31 @@ class GoInterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
   }
 }
 
-// Command for forward navigation.
-commands.registerCommand("extension.goToImplementation", async (target: ImplementationTarget) => {
-  console.log("Executing Go to Implementation command at position:", target.position);
-  const editor = window.activeTextEditor;
-  if (editor) {
-    const start = target.position;
-    const end = new Position(target.position.line, target.position.character + target.methodName.length);
-    editor.selection = new Selection(start, end);
-    editor.revealRange(new Range(start, end));
-    await commands.executeCommand("editor.action.goToImplementation");
-  }
-});
-
-// Command for reverse navigation.
-commands.registerCommand("extension.goToInterface", async (target: ImplementationTarget) => {
-  console.log("Executing Go to Interface command. Navigating to interface at:", target.interfaceLocation);
-  if (target.interfaceLocation && target.interfaceFile) {
-    try {
-      const doc = await workspace.openTextDocument(target.interfaceFile);
-      await window.showTextDocument(doc);
-      const editor = window.activeTextEditor;
-      if (editor) {
-        const pos = target.interfaceLocation;
-        editor.selection = new Selection(pos, pos);
-        editor.revealRange(new Range(pos, pos));
-        console.log(`Navigated to interface at line ${pos.line} in ${target.interfaceFile.fsPath}`);
-      }
-    } catch (error) {
-      console.error("Error navigating to interface:", error);
-    }
-  }
-});
-
-// Gutter decoration for visual flair.
-let gutterDecoration = window.createTextEditorDecorationType({
-  // @ts-ignore
-  gutterIconPath: Uri.joinPath(window.activeTextEditor ? window.activeTextEditor.document.uri : Uri.parse(""), "dummy"),
-  gutterIconSize: "contain"
-});
-
-function updateGutterDecorations(editor: TextEditor, context: ExtensionContext) {
-  const ranges: Range[] = [];
-  const interfaceDefRegex = /^\s*type\s+\w+\s+interface\s*{/;
-  const interfaceMethodRegex = /^\s*\w+\s*\(.*\)/;
-  const methodWithReceiverRegex = /^\s*func\s+\([^)]*\)\s*(\w+)\s*\(.*\)/;
-  for (let i = 0; i < editor.document.lineCount; i++) {
-    const line = editor.document.lineAt(i);
-    if (interfaceDefRegex.test(line.text) ||
-        interfaceMethodRegex.test(line.text) ||
-        methodWithReceiverRegex.test(line.text)) {
-      ranges.push(new Range(new Position(i, 0), new Position(i, 0)));
-    }
-  }
-  editor.setDecorations(gutterDecoration, ranges);
-}
-
 export function activate(context: ExtensionContext) {
-  console.log("Go Implementation Gutter extension activated.");
+  // @ts-ignore
+  context.subscriptions.push(languages.registerCodeLensProvider({ language: "go" }, new GoImplementationCodeLensProvider()));
+  // @ts-ignore
+  context.subscriptions.push(languages.registerCodeLensProvider({ language: "go" }, new GoInterfaceCodeLensProvider()));
+
+  // Register the commands
   context.subscriptions.push(
-    //@ts-ignore
-    languages.registerCodeLensProvider({ language: "go" }, new GoImplementationCodeLensProvider())
-  );
-  context.subscriptions.push(
-    // @ts-ignore
-    languages.registerCodeLensProvider({ language: "go" }, new GoInterfaceCodeLensProvider())
-  );
-  gutterDecoration = window.createTextEditorDecorationType({
-    // @ts-ignore
-    gutterIconPath: Uri.joinPath(context.extensionUri, "media", "intellij-go-to-implementation.svg"),
-    gutterIconSize: "contain"
-  });
-  if (window.activeTextEditor) {
-    updateGutterDecorations(window.activeTextEditor, context);
-  }
-  context.subscriptions.push(
-    window.onDidChangeActiveTextEditor(editor => {
-      if (editor) updateGutterDecorations(editor, context);
+    commands.registerCommand('extension.goToImplementation', async (target: ImplementationTarget) => {
+      const document = window.activeTextEditor?.document;
+      if (!document) return;
+      
+      const implementations = await commands.executeCommand<Location[]>('vscode.executeImplementationProvider', document.uri, target.position);
+      if (implementations && implementations.length > 0) {
+        const location = implementations[0];
+        await commands.executeCommand('vscode.open', location.uri, { selection: location.range });
+      }
     })
   );
+
   context.subscriptions.push(
-    window.onDidChangeTextEditorSelection(event => {
-      updateGutterDecorations(event.textEditor, context);
+    commands.registerCommand('extension.goToInterface', async (target: ImplementationTarget) => {
+      if (target.interfaceLocation && target.interfaceFile) {
+        await commands.executeCommand('vscode.open', target.interfaceFile, { selection: new Range(target.interfaceLocation, target.interfaceLocation) });
+      }
     })
   );
 }
