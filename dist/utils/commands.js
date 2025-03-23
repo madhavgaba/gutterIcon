@@ -61,22 +61,38 @@ function registerCommands() {
                         }
                     }
                     if (implementations.length > 0) {
-                        yield vscode_1.commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
-                        const disposable = vscode_1.window.onDidChangeActiveTextEditor(() => {
-                            vscode_1.commands.executeCommand('closeReferenceSearch');
-                            disposable.dispose();
-                        });
+                        if (implementations.length === 1) {
+                            // If there's only one implementation, navigate directly to it
+                            const implementation = implementations[0];
+                            yield vscode_1.commands.executeCommand('vscode.open', implementation.uri, { selection: implementation.range });
+                        }
+                        else {
+                            // If there are multiple implementations, show the references view
+                            yield vscode_1.commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
+                            const disposable = vscode_1.window.onDidChangeActiveTextEditor(() => {
+                                vscode_1.commands.executeCommand('closeReferenceSearch');
+                                disposable.dispose();
+                            });
+                        }
                     }
                 }
                 else {
                     // For Go, use the built-in implementation provider
                     const implementations = yield vscode_1.commands.executeCommand('vscode.executeImplementationProvider', document.uri, target.position);
                     if (implementations && implementations.length > 0) {
-                        yield vscode_1.commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
-                        const disposable = vscode_1.window.onDidChangeActiveTextEditor(() => {
-                            vscode_1.commands.executeCommand('closeReferenceSearch');
-                            disposable.dispose();
-                        });
+                        if (implementations.length === 1) {
+                            // If there's only one implementation, navigate directly to it
+                            const implementation = implementations[0];
+                            yield vscode_1.commands.executeCommand('vscode.open', implementation.uri, { selection: implementation.range });
+                        }
+                        else {
+                            // If there are multiple implementations, show the references view
+                            yield vscode_1.commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
+                            const disposable = vscode_1.window.onDidChangeActiveTextEditor(() => {
+                                vscode_1.commands.executeCommand('closeReferenceSearch');
+                                disposable.dispose();
+                            });
+                        }
                     }
                 }
             })),

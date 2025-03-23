@@ -54,21 +54,35 @@ export async function registerCommands() {
         }
         
         if (implementations.length > 0) {
-          await commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
-          const disposable = window.onDidChangeActiveTextEditor(() => {
-            commands.executeCommand('closeReferenceSearch');
-            disposable.dispose();
-          });
+          if (implementations.length === 1) {
+            // If there's only one implementation, navigate directly to it
+            const implementation = implementations[0];
+            await commands.executeCommand('vscode.open', implementation.uri, { selection: implementation.range });
+          } else {
+            // If there are multiple implementations, show the references view
+            await commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
+            const disposable = window.onDidChangeActiveTextEditor(() => {
+              commands.executeCommand('closeReferenceSearch');
+              disposable.dispose();
+            });
+          }
         }
       } else {
         // For Go, use the built-in implementation provider
         const implementations = await commands.executeCommand<Location[]>('vscode.executeImplementationProvider', document.uri, target.position);
         if (implementations && implementations.length > 0) {
-          await commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
-          const disposable = window.onDidChangeActiveTextEditor(() => {
-            commands.executeCommand('closeReferenceSearch');
-            disposable.dispose();
-          });
+          if (implementations.length === 1) {
+            // If there's only one implementation, navigate directly to it
+            const implementation = implementations[0];
+            await commands.executeCommand('vscode.open', implementation.uri, { selection: implementation.range });
+          } else {
+            // If there are multiple implementations, show the references view
+            await commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
+            const disposable = window.onDidChangeActiveTextEditor(() => {
+              commands.executeCommand('closeReferenceSearch');
+              disposable.dispose();
+            });
+          }
         }
       }
     }),
