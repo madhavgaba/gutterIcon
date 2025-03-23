@@ -34,7 +34,7 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
         const defMatch = patterns.interfaceDef.exec(line);
         if (defMatch) {
           const interfaceName = defMatch[1];
-          const codeLens = this.createCodeLens(document, lineNumber, interfaceName);
+          const codeLens = this.createCodeLens(document, lineNumber, interfaceName, 0);
           if (codeLens) codeLenses.push(codeLens);
           inInterfaceBlock = true;
           continue;
@@ -47,7 +47,7 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
           }
           const methodMatch = patterns.interfaceMethod.exec(line);
           if (methodMatch) {
-            const codeLens = this.createCodeLens(document, lineNumber, methodMatch[1]);
+            const codeLens = this.createCodeLens(document, lineNumber, methodMatch[1], 0);
             if (codeLens) codeLenses.push(codeLens);
           }
         }
@@ -81,7 +81,7 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
         const implementations = await this.findJavaImplementations(currentInterface, javaFiles, patterns);
         console.log(`Found ${implementations.length} implementations for interface ${currentInterface}`);
         if (implementations.length > 0) {
-          const codeLens = this.createCodeLens(document, lineNumber, currentInterface);
+          const codeLens = this.createCodeLens(document, lineNumber, currentInterface, implementations.length);
           if (codeLens) codeLenses.push(codeLens);
         }
         inInterfaceBlock = true;
@@ -102,7 +102,7 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
           const implementations = await this.findJavaMethodImplementations(methodName, interfaces, javaFiles, patterns);
           console.log(`Found ${implementations.length} implementations for method ${methodName}`);
           if (implementations.length > 0) {
-            const codeLens = this.createCodeLens(document, lineNumber, methodName);
+            const codeLens = this.createCodeLens(document, lineNumber, methodName, implementations.length);
             if (codeLens) codeLenses.push(codeLens);
           }
         }
@@ -238,7 +238,7 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
     return implementations;
   }
 
-  private createCodeLens(document: TextDocument, line: number, methodName: string): CodeLens | undefined {
+  private createCodeLens(document: TextDocument, line: number, methodName: string, implementationCount: number): CodeLens | undefined {
     const lineText = document.lineAt(line).text;
     const methodIndex = lineText.indexOf(methodName);
     if (methodIndex === -1) {
@@ -248,7 +248,7 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
     const pos = new Position(line, methodIndex);
     console.log(`Creating CodeLens for ${methodName} at line ${line}`);
     return new CodeLens(new Range(pos, pos), {
-      title: "$(symbol-method) Implemented by",
+      title: `$(symbol-method) ${implementationCount} implementation${implementationCount !== 1 ? 's' : ''}`,
       command: "extension.goToImplementation",
       arguments: [{ position: pos, methodName }],
     });
