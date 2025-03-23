@@ -16,42 +16,66 @@ class ImplementationCodeLensProvider {
     // @ts-ignore
     provideCodeLenses(document, token) {
         try {
-            const codeLenses = [];
             const language = document.languageId;
             const patterns = languagePatterns_1.LANGUAGE_PATTERNS[language];
             if (!patterns)
-                return codeLenses;
+                return [];
             // For Java, we need to search for implementations in other files
             if (language === 'java') {
                 return this.provideJavaCodeLenses(document, patterns);
             }
-            // For Go, use the existing implementation
-            let inInterfaceBlock = false;
-            for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
-                const line = document.lineAt(lineNumber).text;
-                const defMatch = patterns.interfaceDef.exec(line);
-                if (defMatch) {
-                    const interfaceName = defMatch[1];
-                    const codeLens = this.createCodeLens(document, lineNumber, interfaceName, 0);
-                    if (codeLens)
-                        codeLenses.push(codeLens);
-                    inInterfaceBlock = true;
-                    continue;
-                }
-                if (inInterfaceBlock) {
-                    if (/^\s*}\s*$/.test(line)) {
-                        inInterfaceBlock = false;
-                        continue;
-                    }
-                    const methodMatch = patterns.interfaceMethod.exec(line);
-                    if (methodMatch) {
-                        const codeLens = this.createCodeLens(document, lineNumber, methodMatch[1], 0);
+            // For Go, use the built-in implementation provider but count implementations
+            return new Promise((resolve) => {
+                const codeLenses = [];
+                let pendingCount = 0;
+                const addCodeLens = (lineNumber, name, line) => __awaiter(this, void 0, void 0, function* () {
+                    pendingCount++;
+                    const pos = new vscode_1.Position(lineNumber, line.indexOf(name));
+                    try {
+                        const implementations = yield vscode_1.commands.executeCommand('vscode.executeImplementationProvider', document.uri, pos);
+                        const count = implementations ? implementations.length : 0;
+                        const codeLens = this.createCodeLens(document, lineNumber, name, count);
                         if (codeLens)
                             codeLenses.push(codeLens);
                     }
+                    catch (error) {
+                        console.error(`Error getting implementations for ${name}:`, error);
+                        const codeLens = this.createCodeLens(document, lineNumber, name, 0);
+                        if (codeLens)
+                            codeLenses.push(codeLens);
+                    }
+                    pendingCount--;
+                    if (pendingCount === 0) {
+                        resolve(codeLenses);
+                    }
+                });
+                let inInterfaceBlock = false;
+                for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
+                    const line = document.lineAt(lineNumber).text;
+                    const defMatch = patterns.interfaceDef.exec(line);
+                    if (defMatch) {
+                        const interfaceName = defMatch[1];
+                        addCodeLens(lineNumber, interfaceName, line);
+                        inInterfaceBlock = true;
+                        continue;
+                    }
+                    if (inInterfaceBlock) {
+                        if (/^\s*}\s*$/.test(line)) {
+                            inInterfaceBlock = false;
+                            continue;
+                        }
+                        const methodMatch = patterns.interfaceMethod.exec(line);
+                        if (methodMatch) {
+                            const methodName = methodMatch[1];
+                            addCodeLens(lineNumber, methodName, line);
+                        }
+                    }
                 }
-            }
-            return codeLenses;
+                // If no code lenses were added, resolve immediately
+                if (pendingCount === 0) {
+                    resolve(codeLenses);
+                }
+            });
         }
         catch (error) {
             console.error('Error providing code lenses:', error);

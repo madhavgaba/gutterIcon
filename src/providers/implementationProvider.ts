@@ -8,6 +8,8 @@ import {
   ProviderResult,
   workspace,
   Uri,
+  commands,
+  Location,
 } from "vscode";
 import { LANGUAGE_PATTERNS } from '../patterns/languagePatterns';
 
@@ -15,44 +17,70 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
   // @ts-ignore
   provideCodeLenses(document: TextDocument, token: CancellationToken): ProviderResult<CodeLens[]> {
     try {
-      const codeLenses: CodeLens[] = [];
       const language = document.languageId;
       const patterns = LANGUAGE_PATTERNS[language];
       
-      if (!patterns) return codeLenses;
+      if (!patterns) return [];
 
       // For Java, we need to search for implementations in other files
       if (language === 'java') {
         return this.provideJavaCodeLenses(document, patterns);
       }
 
-      // For Go, use the existing implementation
-      let inInterfaceBlock = false;
-      for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
-        const line = document.lineAt(lineNumber).text;
-        
-        const defMatch = patterns.interfaceDef.exec(line);
-        if (defMatch) {
-          const interfaceName = defMatch[1];
-          const codeLens = this.createCodeLens(document, lineNumber, interfaceName, 0);
-          if (codeLens) codeLenses.push(codeLens);
-          inInterfaceBlock = true;
-          continue;
-        }
+      // For Go, use the built-in implementation provider but count implementations
+      return new Promise<CodeLens[]>((resolve) => {
+        const codeLenses: CodeLens[] = [];
+        let pendingCount = 0;
 
-        if (inInterfaceBlock) {
-          if (/^\s*}\s*$/.test(line)) {
-            inInterfaceBlock = false;
-            continue;
-          }
-          const methodMatch = patterns.interfaceMethod.exec(line);
-          if (methodMatch) {
-            const codeLens = this.createCodeLens(document, lineNumber, methodMatch[1], 0);
+        const addCodeLens = async (lineNumber: number, name: string, line: string) => {
+          pendingCount++;
+          const pos = new Position(lineNumber, line.indexOf(name));
+          try {
+            const implementations = await commands.executeCommand<Location[]>('vscode.executeImplementationProvider', document.uri, pos);
+            const count = implementations ? implementations.length : 0;
+            const codeLens = this.createCodeLens(document, lineNumber, name, count);
+            if (codeLens) codeLenses.push(codeLens);
+          } catch (error) {
+            console.error(`Error getting implementations for ${name}:`, error);
+            const codeLens = this.createCodeLens(document, lineNumber, name, 0);
             if (codeLens) codeLenses.push(codeLens);
           }
+          pendingCount--;
+          if (pendingCount === 0) {
+            resolve(codeLenses);
+          }
+        };
+
+        let inInterfaceBlock = false;
+        for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
+          const line = document.lineAt(lineNumber).text;
+          
+          const defMatch = patterns.interfaceDef.exec(line);
+          if (defMatch) {
+            const interfaceName = defMatch[1];
+            addCodeLens(lineNumber, interfaceName, line);
+            inInterfaceBlock = true;
+            continue;
+          }
+
+          if (inInterfaceBlock) {
+            if (/^\s*}\s*$/.test(line)) {
+              inInterfaceBlock = false;
+              continue;
+            }
+            const methodMatch = patterns.interfaceMethod.exec(line);
+            if (methodMatch) {
+              const methodName = methodMatch[1];
+              addCodeLens(lineNumber, methodName, line);
+            }
+          }
         }
-      }
-      return codeLenses;
+
+        // If no code lenses were added, resolve immediately
+        if (pendingCount === 0) {
+          resolve(codeLenses);
+        }
+      });
     } catch (error) {
       console.error('Error providing code lenses:', error);
       return [];

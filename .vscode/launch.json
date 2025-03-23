@@ -1,7 +1,20 @@
 {
+    "version": "0.2.0",
     "configurations": [
         {
-            "name": "Docker Node.js Launch",
+            "name": "Run Extension (Local)",
+            "type": "extensionHost",
+            "request": "launch",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"
+            ],
+            "preLaunchTask": "npm: compile"
+        },
+        {
+            "name": "Run Extension (Docker)",
             "type": "docker",
             "request": "launch",
             "preLaunchTask": "docker-run: debug",
