@@ -62,7 +62,7 @@ class GoImplementationCodeLensProvider implements CodeLensProvider {
   private createCodeLens(document: TextDocument, line: number, methodName: string): CodeLens {
     const pos = new Position(line, document.lineAt(line).text.indexOf(methodName));
     return new CodeLens(new Range(pos, pos), {
-      title: "$(symbol-method) Go to Implementations",
+      title: "$(symbol-method) Implemented by",
       command: "extension.goToImplementation",
       arguments: [{ position: pos, methodName }],
     });
@@ -196,7 +196,7 @@ class GoInterfaceCodeLensProvider implements CodeLensProvider {
               const methodPos = new Position(line, document.lineAt(line).text.indexOf(methodName));
               codeLenses.push(
                 new CodeLens(new Range(methodPos, methodPos), {
-                  title: "$(symbol-interface) Go to Interface",
+                  title: "$(symbol-interface) Interface",
                   command: "extension.goToInterface",
                   arguments: [{ position: methodPos, methodName, interfaceLocation: interfacePos, interfaceFile: file }],
                 })
@@ -230,8 +230,8 @@ export function activate(context: ExtensionContext) {
       
       const implementations = await commands.executeCommand<Location[]>('vscode.executeImplementationProvider', document.uri, target.position);
       if (implementations && implementations.length > 0) {
-        const location = implementations[0];
-        await commands.executeCommand('vscode.open', location.uri, { selection: location.range });
+        // Show all implementations in the references view
+        await commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
       }
     })
   );

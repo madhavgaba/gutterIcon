@@ -46,7 +46,7 @@ class GoImplementationCodeLensProvider {
     createCodeLens(document, line, methodName) {
         const pos = new vscode_1.Position(line, document.lineAt(line).text.indexOf(methodName));
         return new vscode_1.CodeLens(new vscode_1.Range(pos, pos), {
-            title: "$(symbol-method) Go to Implementations",
+            title: "$(symbol-method) Implemented by",
             command: "extension.goToImplementation",
             arguments: [{ position: pos, methodName }],
         });
@@ -154,7 +154,7 @@ class GoInterfaceCodeLensProvider {
                                 const interfacePos = new vscode_1.Position(i, doc.lineAt(i).text.indexOf(interfaceName));
                                 const methodPos = new vscode_1.Position(line, document.lineAt(line).text.indexOf(methodName));
                                 codeLenses.push(new vscode_1.CodeLens(new vscode_1.Range(methodPos, methodPos), {
-                                    title: "$(symbol-interface) Go to Interface",
+                                    title: "$(symbol-interface) Interface",
                                     command: "extension.goToInterface",
                                     arguments: [{ position: methodPos, methodName, interfaceLocation: interfacePos, interfaceFile: file }],
                                 }));
@@ -188,8 +188,8 @@ function activate(context) {
             return;
         const implementations = yield vscode_1.commands.executeCommand('vscode.executeImplementationProvider', document.uri, target.position);
         if (implementations && implementations.length > 0) {
-            const location = implementations[0];
-            yield vscode_1.commands.executeCommand('vscode.open', location.uri, { selection: location.range });
+            // Show all implementations in the references view
+            yield vscode_1.commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
         }
     })));
     context.subscriptions.push(vscode_1.commands.registerCommand('extension.goToInterface', (target) => __awaiter(this, void 0, void 0, function* () {
