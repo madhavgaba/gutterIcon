@@ -190,6 +190,12 @@ function activate(context) {
         if (implementations && implementations.length > 0) {
             // Show all implementations in the references view
             yield vscode_1.commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
+            // Register a one-time listener for the next navigation event
+            const disposable = vscode_1.window.onDidChangeActiveTextEditor(() => {
+                // Close the references view
+                vscode_1.commands.executeCommand('closeReferenceSearch');
+                disposable.dispose();
+            });
         }
     })));
     context.subscriptions.push(vscode_1.commands.registerCommand('extension.goToInterface', (target) => __awaiter(this, void 0, void 0, function* () {

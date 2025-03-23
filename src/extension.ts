@@ -232,6 +232,13 @@ export function activate(context: ExtensionContext) {
       if (implementations && implementations.length > 0) {
         // Show all implementations in the references view
         await commands.executeCommand('editor.action.showReferences', document.uri, target.position, implementations);
+        
+        // Register a one-time listener for the next navigation event
+        const disposable = window.onDidChangeActiveTextEditor(() => {
+          // Close the references view
+          commands.executeCommand('closeReferenceSearch');
+          disposable.dispose();
+        });
       }
     })
   );
