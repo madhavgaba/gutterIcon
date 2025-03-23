@@ -45,6 +45,34 @@ This extension contributes the following settings:
 * `implementationProvider.enable`: Enable/disable the extension
 * `implementationProvider.debug`: Enable debug logging
 
+## Performance Considerations
+
+The extension is designed to be lightweight and efficient, but here are some important performance considerations:
+
+### Impact on VS Code Performance
+- The extension only activates when you open Go or Java files
+- No background processes or continuous monitoring are running
+- Uses VS Code's built-in CodeLens feature, which is already optimized
+- Implementation detection is done on-demand when viewing interface declarations
+
+### Resource Usage
+- Lightweight text-based analysis for implementation detection
+- Results are cached to improve subsequent lookups
+- Minimal memory footprint
+
+### Performance in Large Codebases
+- For small to medium codebases, there should be negligible performance impact
+- In very large codebases (thousands of files), you might notice:
+  - A slight delay when first opening an interface file
+  - Longer search times when looking for implementations across many files
+  - Subsequent lookups will be faster due to caching
+
+### Optimization Tips
+1. Disable the extension when not working with Go or Java files
+2. Use the `implementationProvider.enable` setting to toggle the extension
+3. If you experience any slowdown, you can temporarily disable the extension
+4. For large projects, consider working with a subset of files when possible
+
 ## Known Issues
 
 - Implementation detection may take a few seconds for large codebases
