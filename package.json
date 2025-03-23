@@ -1,42 +1,41 @@
 {
-    "name": "go-implementation-gutter",
-    "displayName": "Go Implementation Gutter",
-    "description": "Adds a clickable CodeLens for 'Go to Implementation' in Go files.",
-    "version": "0.0.1",
-    "publisher": "your-publisher",
-    "engines": {
-      "vscode": "^1.75.0"
-    },
-    "categories": [
-      "Other"
+  "name": "go-implementation-gutter",
+  "displayName": "Go Implementation Gutter",
+  "description": "Adds a clickable CodeLens for 'Go to Implementation' above interface methods in Go files.",
+  "version": "0.0.2",
+  "publisher": "your-publisher",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:go"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "extension.goToImplementation",
+        "title": "Go to Implementation"
+      }
     ],
-    "activationEvents": [
-      "onLanguage:go"
-    ],
-    "main": "./dist/extension.js",
-    "contributes": {
-      "commands": [
-        {
-          "command": "extension.goToImplementation",
-          "title": "Go to Implementation"
-        }
-      ],
-      "languages": [
-        {
-          "id": "go",
-          "extensions": [".go"],
-          "aliases": ["Go", "go"]
-        }
-      ]
-    },
-    "scripts": {
-      "compile": "tsc -p ./",
-      "watch": "tsc -watch -p ./"
-    },
-    "devDependencies": {
-      "@types/vscode": "^1.75.0",
-      "typescript": "^4.9.5",
-      "vscode": "^1.1.37"
-    }
+    "languages": [
+      {
+        "id": "go",
+        "extensions": [".go"],
+        "aliases": ["Go", "go"]
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "typescript": "^4.9.5",
+    "vscode": "^1.1.37"
   }
-  
+}
