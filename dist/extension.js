@@ -60,63 +60,192 @@ class GoImplementationCodeLensProvider {
 }
 /*
  * Reverse Provider: "Go to Interface"
- * First collects interface method names.
- * Then, for each implementation method (with a receiver) whose name is in an interface,
- * adds a CodeLens.
+ * For each implementation method (with a receiver) whose method name appears in an interface,
+ * we search the document for an interface block that contains that method.
+ * If found, we add a reverse CodeLens at the implementation line with the interface location.
  */
 class GoInterfaceCodeLensProvider {
     // @ts-ignore
     provideCodeLenses(document, token) {
-        const codeLenses = [];
-        const interfaceMethods = new Set();
-        const interfaceDefRegex = /^\s*type\s+\w+\s+interface\s*{/;
-        const interfaceMethodRegex = /^\s*(\w+)\s*\(.*\)/;
-        let inInterfaceBlock = false;
-        for (let i = 0; i < document.lineCount; i++) {
-            const line = document.lineAt(i);
-            const text = line.text;
-            if (interfaceDefRegex.test(text)) {
-                inInterfaceBlock = true;
-                continue;
-            }
-            if (inInterfaceBlock) {
-                if (/^\s*}\s*$/.test(text)) {
-                    inInterfaceBlock = false;
-                    continue;
+        var _a;
+        return __awaiter(this, void 0, void 0, function* () {
+            const codeLenses = [];
+            // Regex for implementation methods with a receiver.
+            // Matches lines like: "func (d *Dog) Speak() string {" or "func (d Dog) Move(distance int) error {"
+            const methodWithReceiverRegex = /^\s*func\s+\(\s*[\w\*\s]+\)\s+(\w+)\s*\(/;
+            // Regex for struct definitions
+            const structDefRegex = /^\s*type\s+(\w+)\s+struct\s*{/;
+            // Find all Go files in the workspace
+            const goFiles = yield vscode_1.workspace.findFiles('**/*.go');
+            // First, collect all interfaces and their methods
+            const interfaces = new Map();
+            for (const file of goFiles) {
+                try {
+                    const doc = yield vscode_1.workspace.openTextDocument(file);
+                    let currentInterface = '';
+                    let inInterfaceBlock = false;
+                    for (let i = 0; i < doc.lineCount; i++) {
+                        const line = doc.lineAt(i);
+                        const text = line.text;
+                        const interfaceDefMatch = /^\s*type\s+(\w+)\s+interface\s*{/.exec(text);
+                        if (interfaceDefMatch) {
+                            currentInterface = interfaceDefMatch[1];
+                            inInterfaceBlock = true;
+                            interfaces.set(currentInterface, new Map());
+                            continue;
+                        }
+                        if (inInterfaceBlock) {
+                            if (/^\s*}\s*$/.test(text)) {
+                                inInterfaceBlock = false;
+                                continue;
+                            }
+                            // Store the full method signature
+                            const methodMatch = /^\s*(\w+)\s*\((.*?)\)/.exec(text);
+                            if (methodMatch) {
+                                (_a = interfaces.get(currentInterface)) === null || _a === void 0 ? void 0 : _a.set(methodMatch[1], methodMatch[2]);
+                            }
+                        }
+                    }
                 }
-                const match = interfaceMethodRegex.exec(text);
-                if (match) {
-                    const methodName = match[1];
-                    interfaceMethods.add(methodName);
-                    console.log(`Collected interface method: ${methodName} (line ${i})`);
-                }
-            }
-        }
-        console.log("Interface methods collected:", Array.from(interfaceMethods));
-        // Relaxed regex for implementation methods with a receiver.
-        // Matches lines like:
-        //   func (d *Dog) Speak() string {
-        //   func (d Dog) Move(distance int) error {
-        const methodWithReceiverRegex = /^\s*func\s+\(\s*[\w\*\s]+\)\s+(\w+)\s*\(/;
-        for (let i = 0; i < document.lineCount; i++) {
-            const line = document.lineAt(i);
-            const text = line.text;
-            const match = methodWithReceiverRegex.exec(text);
-            if (match) {
-                const methodName = match[1];
-                if (interfaceMethods.has(methodName)) {
-                    const startIndex = text.indexOf(methodName);
-                    const pos = new vscode_1.Position(i, startIndex);
-                    codeLenses.push(new vscode_1.CodeLens(new vscode_1.Range(pos, pos), {
-                        title: "$(arrow-left) Go to Interface",
-                        command: "extension.goToInterface",
-                        arguments: [{ position: pos, methodName }]
-                    }));
-                    console.log(`Added Go to Interface CodeLens for method: ${methodName} at line ${i}`);
+                catch (error) {
+                    console.error(`Error reading file ${file.fsPath}:`, error);
                 }
             }
-        }
-        return codeLenses;
+            // Now search for struct implementations and method implementations
+            for (let i = 0; i < document.lineCount; i++) {
+                const line = document.lineAt(i);
+                const text = line.text;
+                // Check for struct definition
+                const structMatch = structDefRegex.exec(text);
+                if (structMatch) {
+                    const structName = structMatch[1];
+                    let structMethods = new Map();
+                    let implementedInterfaces = new Set();
+                    // Collect all methods of this struct with their signatures
+                    for (let j = i + 1; j < document.lineCount; j++) {
+                        const methodLine = document.lineAt(j);
+                        const methodMatch = /^\s*func\s+\(\s*[\w\*\s]+\)\s+(\w+)\s*\((.*?)\)/.exec(methodLine.text);
+                        if (methodMatch) {
+                            structMethods.set(methodMatch[1], methodMatch[2]);
+                        }
+                    }
+                    // Check if this struct implements any interfaces
+                    for (const [interfaceName, interfaceMethods] of interfaces) {
+                        // Skip if we've already added a CodeLens for this interface
+                        if (implementedInterfaces.has(interfaceName)) {
+                            continue;
+                        }
+                        // Check if all interface methods are implemented with matching signatures
+                        const implementsInterface = Array.from(interfaceMethods.entries()).every(([methodName, interfaceSig]) => {
+                            const structSig = structMethods.get(methodName);
+                            return structSig === interfaceSig;
+                        });
+                        if (implementsInterface) {
+                            // Find the interface file and position
+                            for (const file of goFiles) {
+                                try {
+                                    const doc = yield vscode_1.workspace.openTextDocument(file);
+                                    let found = false;
+                                    for (let j = 0; j < doc.lineCount; j++) {
+                                        const interfaceLine = doc.lineAt(j);
+                                        const interfaceMatch = /^\s*type\s+(\w+)\s+interface\s*{/.exec(interfaceLine.text);
+                                        if (interfaceMatch && interfaceMatch[1] === interfaceName) {
+                                            const startIndex = interfaceLine.text.indexOf(interfaceName);
+                                            const interfacePos = new vscode_1.Position(j, startIndex);
+                                            const structStartIndex = text.indexOf(structName);
+                                            const structPos = new vscode_1.Position(i, structStartIndex);
+                                            codeLenses.push(new vscode_1.CodeLens(new vscode_1.Range(structPos, structPos), {
+                                                title: `$(arrow-left) Go to Interface (${interfaceName})`,
+                                                command: "extension.goToInterface",
+                                                arguments: [{
+                                                        position: structPos,
+                                                        methodName: interfaceName,
+                                                        interfaceLocation: interfacePos,
+                                                        interfaceFile: file
+                                                    }]
+                                            }));
+                                            implementedInterfaces.add(interfaceName);
+                                            found = true;
+                                            console.log(`Found interface ${interfaceName} for struct ${structName} in ${file.fsPath}`);
+                                            break;
+                                        }
+                                    }
+                                    if (found)
+                                        break;
+                                }
+                                catch (error) {
+                                    console.error(`Error reading file ${file.fsPath}:`, error);
+                                }
+                            }
+                        }
+                    }
+                }
+                // Check for method implementation
+                const methodMatch = methodWithReceiverRegex.exec(text);
+                if (methodMatch) {
+                    const methodName = methodMatch[1];
+                    let interfaceFound = false;
+                    // Search through all Go files for the interface
+                    for (const file of goFiles) {
+                        try {
+                            const doc = yield vscode_1.workspace.openTextDocument(file);
+                            const docText = doc.getText();
+                            // Search for interface blocks containing this method
+                            const interfaceDefRegex = /^\s*type\s+(\w+)\s+interface\s*{/;
+                            const interfaceMethodRegex = /^\s*(\w+)\s*\(.*\)/;
+                            let inInterfaceBlock = false;
+                            let currentInterfaceName = '';
+                            for (let j = 0; j < doc.lineCount; j++) {
+                                const interfaceLine = doc.lineAt(j);
+                                const interfaceText = interfaceLine.text;
+                                const defMatch = interfaceDefRegex.exec(interfaceText);
+                                if (defMatch) {
+                                    currentInterfaceName = defMatch[1];
+                                    inInterfaceBlock = true;
+                                    continue;
+                                }
+                                if (inInterfaceBlock) {
+                                    if (/^\s*}\s*$/.test(interfaceText)) {
+                                        inInterfaceBlock = false;
+                                        continue;
+                                    }
+                                    const methodMatch = interfaceMethodRegex.exec(interfaceText);
+                                    if (methodMatch && methodMatch[1] === methodName) {
+                                        // Found the interface! Create a CodeLens
+                                        const startIndex = interfaceText.indexOf(methodName);
+                                        const interfacePos = new vscode_1.Position(j, startIndex);
+                                        const implStartIndex = text.indexOf(methodName);
+                                        const implPos = new vscode_1.Position(i, implStartIndex);
+                                        codeLenses.push(new vscode_1.CodeLens(new vscode_1.Range(implPos, implPos), {
+                                            title: `$(arrow-left) Go to Interface (${currentInterfaceName}.${methodName})`,
+                                            command: "extension.goToInterface",
+                                            arguments: [{
+                                                    position: implPos,
+                                                    methodName,
+                                                    interfaceLocation: interfacePos,
+                                                    interfaceFile: file
+                                                }]
+                                        }));
+                                        interfaceFound = true;
+                                        console.log(`Found interface ${currentInterfaceName} for ${methodName} in ${file.fsPath}`);
+                                        break;
+                                    }
+                                }
+                            }
+                            if (interfaceFound)
+                                break;
+                        }
+                        catch (error) {
+                            console.error(`Error reading file ${file.fsPath}:`, error);
+                        }
+                    }
+                    if (!interfaceFound) {
+                        console.log(`No interface found for ${methodName} at line ${i}`);
+                    }
+                }
+            }
+            return codeLenses;
+        });
     }
 }
 // Command for forward navigation.
@@ -131,25 +260,23 @@ vscode_1.commands.registerCommand("extension.goToImplementation", (target) => __
         yield vscode_1.commands.executeCommand("editor.action.goToImplementation");
     }
 }));
-// Custom command for reverse navigation.
+// Command for reverse navigation.
 vscode_1.commands.registerCommand("extension.goToInterface", (target) => __awaiter(void 0, void 0, void 0, function* () {
-    console.log("Executing custom Go to Interface command for method:", target.methodName);
-    const editor = vscode_1.window.activeTextEditor;
-    if (editor) {
-        const docText = editor.document.getText();
-        // Use a regex with the 's' flag to search for an interface block containing the method name.
-        const regex = new RegExp(`type\\s+(\\w+)\\s+interface\\s*{[^}]*\\b${target.methodName}\\b`, 's');
-        const match = regex.exec(docText);
-        if (match) {
-            const index = match.index;
-            const pos = editor.document.positionAt(index);
-            editor.selection = new vscode_1.Selection(pos, pos);
-            editor.revealRange(new vscode_1.Range(pos, pos));
-            console.log(`Found interface block for ${target.methodName} at line ${pos.line}`);
+    console.log("Executing Go to Interface command. Navigating to interface at:", target.interfaceLocation);
+    if (target.interfaceLocation && target.interfaceFile) {
+        try {
+            const doc = yield vscode_1.workspace.openTextDocument(target.interfaceFile);
+            yield vscode_1.window.showTextDocument(doc);
+            const editor = vscode_1.window.activeTextEditor;
+            if (editor) {
+                const pos = target.interfaceLocation;
+                editor.selection = new vscode_1.Selection(pos, pos);
+                editor.revealRange(new vscode_1.Range(pos, pos));
+                console.log(`Navigated to interface at line ${pos.line} in ${target.interfaceFile.fsPath}`);
+            }
         }
-        else {
-            console.log(`No interface block found for ${target.methodName}. Falling back.`);
-            yield vscode_1.commands.executeCommand("editor.action.goToTypeDefinition");
+        catch (error) {
+            console.error("Error navigating to interface:", error);
         }
     }
 }));
@@ -177,7 +304,7 @@ function updateGutterDecorations(editor, context) {
 function activate(context) {
     console.log("Go Implementation Gutter extension activated.");
     context.subscriptions.push(
-    // @ts-ignore
+    //@ts-ignore
     vscode_1.languages.registerCodeLensProvider({ language: "go" }, new GoImplementationCodeLensProvider()));
     context.subscriptions.push(
     // @ts-ignore
