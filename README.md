@@ -2,6 +2,13 @@
 
 A Visual Studio Code extension that provides enhanced implementation detection and navigation for Go and Java files. This extension helps developers quickly find and navigate between interface implementations and their corresponding classes.
 
+
+## Demo
+
+![Implementation Provider Demo](media/implementation-provider-demo.gif)
+
+*Watch how the extension helps you navigate between interfaces and implementations with a single click*
+
 ## Features
 
 - **Implementation Detection**: Automatically detects interface implementations in Go and Java files
@@ -9,12 +16,6 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 - **Quick Navigation**: Click on CodeLens indicators to navigate between interfaces and their implementations
 - **Multi-language Support**: Works with both Go and Java files
 - **Real-time Updates**: Updates implementation indicators as you type
-
-## Demo
-
-![Implementation Provider Demo](media/implementation-provider-demo.gif)
-
-*Watch how the extension helps you navigate between interfaces and implementations with a single click*
 
 ## Requirements
 
