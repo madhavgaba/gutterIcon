@@ -1,15 +1,16 @@
 import { Position, Uri } from "vscode";
 
+export interface InterfaceInfo {
+  interfaceLocation: Position;
+  interfaceFile: Uri;
+}
+
 export interface ImplementationTarget {
-  position: Position;
   methodName: string;
+  position: Position;
   interfaceLocation?: Position;
   interfaceFile?: Uri;
-  interfaces?: Array<{
-    name: string;
-    interfaceLocation: Position;
-    interfaceFile: Uri;
-  }>;
+  interfaces?: InterfaceInfo[];
 }
 
 export interface LanguagePatterns {

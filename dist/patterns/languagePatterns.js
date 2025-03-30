@@ -11,8 +11,8 @@ exports.LANGUAGE_PATTERNS = {
     java: {
         interfaceDef: /^\s*(?:public\s+)?(?:abstract\s+)?interface\s+(\w+)(?:\s+extends\s+[^{]+)?\s*{/,
         interfaceMethod: /^\s*(?:public\s+)?(?:abstract\s+)?(?:default\s+)?(?:static\s+)?(?:<[^>]+>\s*)?(\w+)\s*\([^)]*\)(?:\s+throws\s+[^{]+)?\s*;?/,
-        methodWithReceiver: /^\s*(?:public\s+)?(?:private\s+)?(?:protected\s+)?(?:static\s+)?(?:<[^>]+>\s*)?(\w+)\s*\([^)]*\)(?:\s+throws\s+[^{]+)?\s*{/,
-        structDef: /^\s*(?:public\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+[^{]+)?(?:\s+implements\s+[^{]+)?\s*{/,
+        methodWithReceiver: /(\w+)\s*\([^)]*\)\s*{/,
+        structDef: /class\s+(\w+)/,
     },
 };
 //# sourceMappingURL=languagePatterns.js.map
