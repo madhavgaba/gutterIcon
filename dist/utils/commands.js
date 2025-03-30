@@ -97,8 +97,26 @@ function registerCommands() {
                 }
             })),
             vscode_1.commands.registerCommand('extension.goToInterface', (target) => __awaiter(this, void 0, void 0, function* () {
-                if (target.interfaceLocation && target.interfaceFile) {
-                    yield vscode_1.commands.executeCommand('vscode.open', target.interfaceFile, { selection: new vscode_1.Range(target.interfaceLocation, target.interfaceLocation) });
+                var _b;
+                if (target.interfaces && target.interfaces.length > 0) {
+                    // Create locations for all interfaces
+                    const locations = target.interfaces.map(i => new vscode_1.Location(i.interfaceFile, new vscode_1.Range(i.interfaceLocation, i.interfaceLocation)));
+                    // Show references view using the current document and position
+                    const document = (_b = vscode_1.window.activeTextEditor) === null || _b === void 0 ? void 0 : _b.document;
+                    if (document) {
+                        yield vscode_1.commands.executeCommand('editor.action.showReferences', document.uri, target.position, locations);
+                        // Close references view when editor changes
+                        const disposable = vscode_1.window.onDidChangeActiveTextEditor(() => {
+                            vscode_1.commands.executeCommand('closeReferenceSearch');
+                            disposable.dispose();
+                        });
+                    }
+                }
+                else if (target.interfaceLocation && target.interfaceFile) {
+                    // Backward compatibility for single interface
+                    yield vscode_1.commands.executeCommand('vscode.open', target.interfaceFile, {
+                        selection: new vscode_1.Range(target.interfaceLocation, target.interfaceLocation)
+                    });
                 }
             }))
         ];

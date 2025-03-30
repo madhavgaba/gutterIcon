@@ -2,6 +2,13 @@ import { commands, window, Range, Location, Uri, Position, workspace } from 'vsc
 import { ImplementationTarget } from '../models/types';
 import { LANGUAGE_PATTERNS } from '../patterns/languagePatterns';
 
+interface QuickPickItem {
+  label: string;
+  detail: string;
+  interfaceLocation: Position;
+  interfaceFile: Uri;
+}
+
 export async function registerCommands() {
   return [
     commands.registerCommand('extension.goToImplementation', async (target: ImplementationTarget) => {
@@ -88,8 +95,28 @@ export async function registerCommands() {
     }),
 
     commands.registerCommand('extension.goToInterface', async (target: ImplementationTarget) => {
-      if (target.interfaceLocation && target.interfaceFile) {
-        await commands.executeCommand('vscode.open', target.interfaceFile, { selection: new Range(target.interfaceLocation, target.interfaceLocation) });
+      if (target.interfaces && target.interfaces.length > 0) {
+        // Create locations for all interfaces
+        const locations = target.interfaces.map(i => 
+          new Location(i.interfaceFile, new Range(i.interfaceLocation, i.interfaceLocation))
+        );
+        
+        // Show references view using the current document and position
+        const document = window.activeTextEditor?.document;
+        if (document) {
+          await commands.executeCommand('editor.action.showReferences', document.uri, target.position, locations);
+          
+          // Close references view when editor changes
+          const disposable = window.onDidChangeActiveTextEditor(() => {
+            commands.executeCommand('closeReferenceSearch');
+            disposable.dispose();
+          });
+        }
+      } else if (target.interfaceLocation && target.interfaceFile) {
+        // Backward compatibility for single interface
+        await commands.executeCommand('vscode.open', target.interfaceFile, {
+          selection: new Range(target.interfaceLocation, target.interfaceLocation)
+        });
       }
     })
   ];

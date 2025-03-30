@@ -5,6 +5,11 @@ export interface ImplementationTarget {
   methodName: string;
   interfaceLocation?: Position;
   interfaceFile?: Uri;
+  interfaces?: Array<{
+    name: string;
+    interfaceLocation: Position;
+    interfaceFile: Uri;
+  }>;
 }
 
 export interface LanguagePatterns {

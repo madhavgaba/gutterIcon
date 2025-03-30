@@ -137,23 +137,25 @@ export class InterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
     const codeLenses: CodeLens[] = [];
     const patterns = LANGUAGE_PATTERNS[language];
     
+    const interfaceLocations: { name: string, location: Position, file: Uri }[] = [];
+    
+    // First collect all interface locations
     for (const [interfaceName] of matchingInterfaces) {
-      // Find the first file containing the interface definition
       for (const file of goFiles) {
         try {
           const doc = await workspace.openTextDocument(file);
           for (let i = 0; i < doc.lineCount; i++) {
-            if (doc.lineAt(i).text.match(patterns.interfaceDef)) {
-              const interfacePos = new Position(i, doc.lineAt(i).text.indexOf(interfaceName));
-              const methodPos = new Position(line, document.lineAt(line).text.indexOf(methodName));
-              codeLenses.push(
-                new CodeLens(new Range(methodPos, methodPos), {
-                  title: "$(symbol-interface) Interface",
-                  command: "extension.goToInterface",
-                  arguments: [{ position: methodPos, methodName, interfaceLocation: interfacePos, interfaceFile: file }],
-                })
-              );
-              return codeLenses;
+            const lineText = doc.lineAt(i).text;
+            if (lineText.match(patterns.interfaceDef)) {
+              const interfaceIndex = lineText.indexOf(interfaceName);
+              if (interfaceIndex >= 0) {
+                interfaceLocations.push({
+                  name: interfaceName,
+                  location: new Position(i, interfaceIndex),
+                  file: file
+                });
+                break;
+              }
             }
           }
         } catch (error) {
@@ -161,6 +163,29 @@ export class InterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
         }
       }
     }
+    
+    // If we found any interfaces, create a single CodeLens
+    if (interfaceLocations.length > 0) {
+      const methodIndex = document.lineAt(line).text.indexOf(methodName);
+      const methodPos = new Position(line, methodIndex);
+      
+      codeLenses.push(
+        new CodeLens(new Range(methodPos, methodPos), {
+          title: `$(symbol-interface) Implements ${interfaceLocations.length} interface${interfaceLocations.length > 1 ? 's' : ''}`,
+          command: "extension.goToInterface",
+          arguments: [{ 
+            position: methodPos, 
+            methodName, 
+            interfaces: interfaceLocations.map(i => ({
+              name: i.name,
+              interfaceLocation: i.location,
+              interfaceFile: i.file
+            }))
+          }],
+        })
+      );
+    }
+    
     return codeLenses;
   }
 } 

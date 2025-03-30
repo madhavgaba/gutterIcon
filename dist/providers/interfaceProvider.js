@@ -108,21 +108,24 @@ class InterfaceCodeLensProvider {
         return __awaiter(this, void 0, void 0, function* () {
             const codeLenses = [];
             const patterns = languagePatterns_1.LANGUAGE_PATTERNS[language];
+            const interfaceLocations = [];
+            // First collect all interface locations
             for (const [interfaceName] of matchingInterfaces) {
-                // Find the first file containing the interface definition
                 for (const file of goFiles) {
                     try {
                         const doc = yield vscode_1.workspace.openTextDocument(file);
                         for (let i = 0; i < doc.lineCount; i++) {
-                            if (doc.lineAt(i).text.match(patterns.interfaceDef)) {
-                                const interfacePos = new vscode_1.Position(i, doc.lineAt(i).text.indexOf(interfaceName));
-                                const methodPos = new vscode_1.Position(line, document.lineAt(line).text.indexOf(methodName));
-                                codeLenses.push(new vscode_1.CodeLens(new vscode_1.Range(methodPos, methodPos), {
-                                    title: "$(symbol-interface) Interface",
-                                    command: "extension.goToInterface",
-                                    arguments: [{ position: methodPos, methodName, interfaceLocation: interfacePos, interfaceFile: file }],
-                                }));
-                                return codeLenses;
+                            const lineText = doc.lineAt(i).text;
+                            if (lineText.match(patterns.interfaceDef)) {
+                                const interfaceIndex = lineText.indexOf(interfaceName);
+                                if (interfaceIndex >= 0) {
+                                    interfaceLocations.push({
+                                        name: interfaceName,
+                                        location: new vscode_1.Position(i, interfaceIndex),
+                                        file: file
+                                    });
+                                    break;
+                                }
                             }
                         }
                     }
@@ -130,6 +133,24 @@ class InterfaceCodeLensProvider {
                         console.error(`Error reading file ${file.fsPath}:`, error);
                     }
                 }
+            }
+            // If we found any interfaces, create a single CodeLens
+            if (interfaceLocations.length > 0) {
+                const methodIndex = document.lineAt(line).text.indexOf(methodName);
+                const methodPos = new vscode_1.Position(line, methodIndex);
+                codeLenses.push(new vscode_1.CodeLens(new vscode_1.Range(methodPos, methodPos), {
+                    title: `$(symbol-interface) Implements ${interfaceLocations.length} interface${interfaceLocations.length > 1 ? 's' : ''}`,
+                    command: "extension.goToInterface",
+                    arguments: [{
+                            position: methodPos,
+                            methodName,
+                            interfaces: interfaceLocations.map(i => ({
+                                name: i.name,
+                                interfaceLocation: i.location,
+                                interfaceFile: i.file
+                            }))
+                        }],
+                }));
             }
             return codeLenses;
         });
