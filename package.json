@@ -2,7 +2,7 @@
   "name": "go-implementation-gutter",
   "displayName": "CodeJump+",
   "description": "Adds a clickable CodeLens for 'Go to Implementation' above interface methods in Go files.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "MadhavGaba",
   "license": "MIT",
   "repository": {

@@ -4,7 +4,15 @@ import { ImplementationTarget } from '../../models/types';
 export class InterfaceHandler {
   public async handleGoToInterface(target: ImplementationTarget): Promise<void> {
     if (target.interfaces && target.interfaces.length > 0) {
-      await this.handleMultipleInterfaces(target);
+      if (target.interfaces.length === 1) {
+        // If there's only one interface, navigate directly to it
+        const interfaceInfo = target.interfaces[0];
+        await commands.executeCommand('vscode.open', interfaceInfo.interfaceFile, {
+          selection: new Range(interfaceInfo.interfaceLocation, interfaceInfo.interfaceLocation)
+        });
+      } else {
+        await this.handleMultipleInterfaces(target);
+      }
     } else if (target.interfaceLocation && target.interfaceFile) {
       await this.handleSingleInterface(target);
     }

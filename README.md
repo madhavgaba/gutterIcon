@@ -10,6 +10,12 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 - **Multi-language Support**: Works with both Go and Java files
 - **Real-time Updates**: Updates implementation indicators as you type
 
+## Demo
+
+![Implementation Provider Demo](media/implementation-provider-demo.gif)
+
+*Watch how the extension helps you navigate between interfaces and implementations with a single click*
+
 ## Requirements
 
 - Visual Studio Code 1.60.0 or higher
@@ -30,6 +36,8 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 2. Look for the "Implemented by" CodeLens above interface declarations
 3. Click on the CodeLens to see all implementations
 4. Click on any implementation to navigate to it
+5. When there's only one implementation, you'll be taken directly to it
+6. When there are multiple implementations, you'll see a list to choose from
 
 ### For Java Files
 
@@ -37,6 +45,14 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 2. Look for the "Implemented by" CodeLens above interface declarations
 3. Click on the CodeLens to see all implementing classes
 4. Click on any implementation to navigate to it
+5. When there's only one implementation, you'll be taken directly to it
+6. When there are multiple implementations, you'll see a list to choose from
+
+### Navigation Behavior
+
+- **Single Implementation**: When there's only one implementation, clicking the CodeLens will take you directly to it
+- **Multiple Implementations**: When there are multiple implementations, clicking the CodeLens will show a list of all implementations for you to choose from
+- **Interface Navigation**: When viewing an implementation, clicking the "Implements" CodeLens will take you directly to the interface if there's only one, or show a list if there are multiple interfaces
 
 ## Extension Settings
 

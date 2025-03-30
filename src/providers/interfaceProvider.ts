@@ -169,21 +169,39 @@ export class InterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
       const methodIndex = document.lineAt(line).text.indexOf(methodName);
       const methodPos = new Position(line, methodIndex);
       
-      codeLenses.push(
-        new CodeLens(new Range(methodPos, methodPos), {
-          title: `$(symbol-interface) Implements ${interfaceLocations.length} interface${interfaceLocations.length > 1 ? 's' : ''}`,
-          command: "extension.goToInterface",
-          arguments: [{ 
-            position: methodPos, 
-            methodName, 
-            interfaces: interfaceLocations.map(i => ({
-              name: i.name,
-              interfaceLocation: i.location,
-              interfaceFile: i.file
-            }))
-          }],
-        })
-      );
+      if (interfaceLocations.length === 1) {
+        // For single interface, pass location and file directly
+        const interfaceInfo = interfaceLocations[0];
+        codeLenses.push(
+          new CodeLens(new Range(methodPos, methodPos), {
+            title: "$(symbol-interface) Interface",
+            command: "extension.goToInterface",
+            arguments: [{ 
+              position: methodPos, 
+              methodName,
+              interfaceLocation: interfaceInfo.location,
+              interfaceFile: interfaceInfo.file
+            }],
+          })
+        );
+      } else {
+        // For multiple interfaces, pass the array
+        codeLenses.push(
+          new CodeLens(new Range(methodPos, methodPos), {
+            title: `$(symbol-interface) Implements ${interfaceLocations.length} interfaces`,
+            command: "extension.goToInterface",
+            arguments: [{ 
+              position: methodPos, 
+              methodName, 
+              interfaces: interfaceLocations.map(i => ({
+                name: i.name,
+                interfaceLocation: i.location,
+                interfaceFile: i.file
+              }))
+            }],
+          })
+        );
+      }
     }
     
     return codeLenses;
