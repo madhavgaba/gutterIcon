@@ -26,7 +26,7 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 
 1. Open VS Code
 2. Go to the Extensions view (Ctrl+Shift+X or Cmd+Shift+X)
-3. Search for "Implementation Provider"
+3. Search for "CodeJump"
 4. Click Install
 
 ## Usage
@@ -34,7 +34,7 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 ### For Go Files
 
 1. Open a Go file containing an interface
-2. Look for the "Implemented by" CodeLens above interface declarations
+2. Look for the "Implemenatations" CodeLens above interface declarations
 3. Click on the CodeLens to see all implementations
 4. Click on any implementation to navigate to it
 5. When there's only one implementation, you'll be taken directly to it
@@ -43,7 +43,7 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 ### For Java Files
 
 1. Open a Java file containing an interface
-2. Look for the "Implemented by" CodeLens above interface declarations
+2. Look for the "Implementations" CodeLens above interface declarations
 3. Click on the CodeLens to see all implementing classes
 4. Click on any implementation to navigate to it
 5. When there's only one implementation, you'll be taken directly to it
@@ -54,13 +54,6 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 - **Single Implementation**: When there's only one implementation, clicking the CodeLens will take you directly to it
 - **Multiple Implementations**: When there are multiple implementations, clicking the CodeLens will show a list of all implementations for you to choose from
 - **Interface Navigation**: When viewing an implementation, clicking the "Implements" CodeLens will take you directly to the interface if there's only one, or show a list if there are multiple interfaces
-
-## Extension Settings
-
-This extension contributes the following settings:
-
-* `implementationProvider.enable`: Enable/disable the extension
-* `implementationProvider.debug`: Enable debug logging
 
 ## Performance Considerations
 
@@ -86,9 +79,8 @@ The extension is designed to be lightweight and efficient, but here are some imp
 
 ### Optimization Tips
 1. Disable the extension when not working with Go or Java files
-2. Use the `implementationProvider.enable` setting to toggle the extension
-3. If you experience any slowdown, you can temporarily disable the extension
-4. For large projects, consider working with a subset of files when possible
+2. If you experience any slowdown, you can temporarily disable the extension
+3. For large projects, consider working with a subset of files when possible
 
 ## Known Issues
 
@@ -108,7 +100,7 @@ Initial release of the Implementation Provider extension with support for:
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+The repository will soon be open sourced.
 
 ## License
 
