@@ -5,7 +5,7 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 
 ## Demo
 
-![Implementation Provider Demo](media/implementation-provider-demo.gif)
+![Implementation Provider Demo](https://drive.google.com/file/d/1DTYPt5oHbsClKD_AdX-g29Lwrd8d0rqI/view)
 
 *Watch how the extension helps you navigate between interfaces and implementations with a single click*
 
