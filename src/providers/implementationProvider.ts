@@ -109,11 +109,26 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
         const implementations = await this.findJavaImplementations(currentInterface, javaFiles, patterns);
         console.log(`Found ${implementations.length} implementations for interface ${currentInterface}`);
         if (implementations.length > 0) {
-          // Create locations for all implementations
-          const locations = implementations.map(impl => {
-            const pos = new Position(impl.line, 0); // Start of class line
-            return { uri: impl.uri, range: new Range(pos, pos) };
-          });
+          // Use fs.readFile to find the class definition line for each implementation
+          const locations = [];
+          for (const impl of implementations) {
+            try {
+              const data = await workspace.fs.readFile(impl.uri);
+              const content = Buffer.from(data).toString('utf8');
+              const lines = content.split(/\r?\n/);
+              for (let i = 0; i < lines.length; i++) {
+                const lineText = lines[i];
+                const match = patterns.structDef.exec(lineText);
+                if (match && match[1] === impl.className) {
+                  const pos = new Position(i, lineText.indexOf(impl.className));
+                  locations.push({ uri: impl.uri, range: new Range(pos, pos) });
+                  break;
+                }
+              }
+            } catch (error) {
+              console.error(`Error reading file ${impl.uri.fsPath}:`, error);
+            }
+          }
           const codeLens = this.createCodeLens(document, lineNumber, currentInterface, implementations.length, locations);
           if (codeLens) codeLenses.push(codeLens);
         }
