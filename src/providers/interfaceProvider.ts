@@ -53,12 +53,15 @@ export class InterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
 
     for (const file of goFiles) {
       try {
-        const doc = await workspace.openTextDocument(file);
+        // Use fs.readFile for efficiency
+        const data = await workspace.fs.readFile(file);
+        const content = Buffer.from(data).toString('utf8');
+        const lines = content.split(/\r?\n/);
         let currentInterface = "";
         let inInterfaceBlock = false;
 
-        for (let i = 0; i < doc.lineCount; i++) {
-          const line = doc.lineAt(i).text;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
           const match = patterns.interfaceDef.exec(line);
 
           if (match) {
@@ -159,9 +162,12 @@ export class InterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
     for (const [interfaceName] of matchingInterfaces) {
       for (const file of goFiles) {
         try {
-          const doc = await workspace.openTextDocument(file);
-          for (let i = 0; i < doc.lineCount; i++) {
-            const lineText = doc.lineAt(i).text;
+          // Use fs.readFile for efficiency
+          const data = await workspace.fs.readFile(file);
+          const content = Buffer.from(data).toString('utf8');
+          const lines = content.split(/\r?\n/);
+          for (let i = 0; i < lines.length; i++) {
+            const lineText = lines[i];
             if (lineText.match(patterns.interfaceDef)) {
               const interfaceIndex = lineText.indexOf(interfaceName);
               if (interfaceIndex >= 0) {

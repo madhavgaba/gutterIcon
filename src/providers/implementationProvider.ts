@@ -110,25 +110,10 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
         console.log(`Found ${implementations.length} implementations for interface ${currentInterface}`);
         if (implementations.length > 0) {
           // Create locations for all implementations
-          const locations = [];
-          for (const file of implementations) {
-            const doc = await workspace.openTextDocument(file);
-            for (let i = 0; i < doc.lineCount; i++) {
-              const lineText = doc.lineAt(i).text;
-              const match = patterns.structDef.exec(lineText);
-              if (match) {
-                const className = match[1];
-                const implementsMatch = lineText.match(/implements\s+([^{]+)/);
-                if (implementsMatch) {
-                  const implementedInterfaces = implementsMatch[1].split(',').map(i => i.trim());
-                  if (implementedInterfaces.includes(currentInterface)) {
-                    const pos = new Position(i, lineText.indexOf(className));
-                    locations.push({ uri: file, range: new Range(pos, pos) });
-                  }
-                }
-              }
-            }
-          }
+          const locations = implementations.map(impl => {
+            const pos = new Position(impl.line, 0); // Start of class line
+            return { uri: impl.uri, range: new Range(pos, pos) };
+          });
           const codeLens = this.createCodeLens(document, lineNumber, currentInterface, implementations.length, locations);
           if (codeLens) codeLenses.push(codeLens);
         }
@@ -200,23 +185,23 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
     return interfaces;
   }
 
-  private async findJavaImplementations(interfaceName: string, javaFiles: Uri[], patterns: any): Promise<Uri[]> {
-    const implementations: Uri[] = [];
-    
+  private async findJavaImplementations(interfaceName: string, javaFiles: Uri[], patterns: any): Promise<{ uri: Uri, line: number, className: string }[]> {
+    const implementations: { uri: Uri, line: number, className: string }[] = [];
     for (const file of javaFiles) {
       try {
-        const doc = await workspace.openTextDocument(file);
-        for (let i = 0; i < doc.lineCount; i++) {
-          const line = doc.lineAt(i).text;
+        const data = await workspace.fs.readFile(file);
+        const content = Buffer.from(data).toString('utf8');
+        const lines = content.split(/\r?\n/);
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
           const match = patterns.structDef.exec(line);
           if (match) {
-            // Check if this class implements the interface (in a comma-separated list)
+            const className = match[1];
             const implementsMatch = line.match(/implements\s+([^{]+)/);
             if (implementsMatch) {
               const implementedInterfaces = implementsMatch[1].split(',').map(i => i.trim());
               if (implementedInterfaces.includes(interfaceName)) {
-                implementations.push(file);
-                // Do NOT break; keep searching for more classes in this file
+                implementations.push({ uri: file, line: i, className });
               }
             }
           }
