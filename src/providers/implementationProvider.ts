@@ -109,7 +109,27 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
         const implementations = await this.findJavaImplementations(currentInterface, javaFiles, patterns);
         console.log(`Found ${implementations.length} implementations for interface ${currentInterface}`);
         if (implementations.length > 0) {
-          const codeLens = this.createCodeLens(document, lineNumber, currentInterface, implementations.length);
+          // Create locations for all implementations
+          const locations = [];
+          for (const file of implementations) {
+            const doc = await workspace.openTextDocument(file);
+            for (let i = 0; i < doc.lineCount; i++) {
+              const lineText = doc.lineAt(i).text;
+              const match = patterns.structDef.exec(lineText);
+              if (match) {
+                const className = match[1];
+                const implementsMatch = lineText.match(/implements\s+([^{]+)/);
+                if (implementsMatch) {
+                  const implementedInterfaces = implementsMatch[1].split(',').map(i => i.trim());
+                  if (implementedInterfaces.includes(currentInterface)) {
+                    const pos = new Position(i, lineText.indexOf(className));
+                    locations.push({ uri: file, range: new Range(pos, pos) });
+                  }
+                }
+              }
+            }
+          }
+          const codeLens = this.createCodeLens(document, lineNumber, currentInterface, implementations.length, locations);
           if (codeLens) codeLenses.push(codeLens);
         }
         inInterfaceBlock = true;
@@ -190,11 +210,14 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
           const line = doc.lineAt(i).text;
           const match = patterns.structDef.exec(line);
           if (match) {
-            console.log(`Checking class in ${file.fsPath}: ${line}`);
-            if (line.includes(`implements ${interfaceName}`)) {
-              console.log(`Found implementation of ${interfaceName} in ${file.fsPath}`);
-              implementations.push(file);
-              break;
+            // Check if this class implements the interface (in a comma-separated list)
+            const implementsMatch = line.match(/implements\s+([^{]+)/);
+            if (implementsMatch) {
+              const implementedInterfaces = implementsMatch[1].split(',').map(i => i.trim());
+              if (implementedInterfaces.includes(interfaceName)) {
+                implementations.push(file);
+                // Do NOT break; keep searching for more classes in this file
+              }
             }
           }
         }
@@ -266,7 +289,7 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
     return implementations;
   }
 
-  private createCodeLens(document: TextDocument, line: number, methodName: string, implementationCount: number): CodeLens | undefined {
+  private createCodeLens(document: TextDocument, line: number, methodName: string, implementationCount: number, locations?: { uri: Uri, range: Range }[]): CodeLens | undefined {
     const lineText = document.lineAt(line).text;
     const methodIndex = lineText.indexOf(methodName);
     if (methodIndex === -1) {
@@ -275,10 +298,14 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
     }
     const pos = new Position(line, methodIndex);
     console.log(`Creating CodeLens for ${methodName} at line ${line}`);
+    const args: any = { position: pos, methodName };
+    if (locations && locations.length > 0) {
+      args.implementations = locations;
+    }
     return new CodeLens(new Range(pos, pos), {
       title: `$(symbol-method) ${implementationCount} implementation${implementationCount !== 1 ? 's' : ''}`,
       command: "extension.goToImplementation",
-      arguments: [{ position: pos, methodName }],
+      arguments: [args],
     });
   }
 } 

@@ -103,9 +103,25 @@ export class InterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
       }
     }
 
-    const matchingInterfaces = [...interfaces.entries()].filter(([_, methods]) =>
-      [...methods].every((method) => structMethods.has(method))
-    );
+    let matchingInterfaces: [string, Set<string>][] = [];
+    if (language === 'java') {
+      // Parse the implements clause from the class definition line
+      const classLine = document.lineAt(line).text;
+      const implementsMatch = classLine.match(/implements\s+([^{]+)/);
+      let implementedInterfaces: string[] = [];
+      if (implementsMatch) {
+        implementedInterfaces = implementsMatch[1].split(',').map(i => i.trim());
+      }
+      // Only consider interfaces explicitly listed in implements
+      matchingInterfaces = [...interfaces.entries()].filter(([name, methods]) =>
+        implementedInterfaces.includes(name) && [...methods].every((method) => structMethods.has(method))
+      );
+    } else {
+      // Go: implicit interface implementation by method set
+      matchingInterfaces = [...interfaces.entries()].filter(([_, methods]) =>
+        [...methods].every((method) => structMethods.has(method))
+      );
+    }
 
     return this.createInterfaceCodeLenses(document, line, structName, matchingInterfaces, goFiles, language);
   }

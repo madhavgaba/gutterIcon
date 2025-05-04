@@ -11,9 +11,24 @@ interface QuickPickItem {
 
 export async function registerCommands() {
   return [
-    commands.registerCommand('extension.goToImplementation', async (target: ImplementationTarget) => {
+    commands.registerCommand('extension.goToImplementation', async (target: ImplementationTarget & { implementations?: { uri: Uri, range: Range }[] }) => {
       const document = window.activeTextEditor?.document;
       if (!document) return;
+      
+      // If implementations are provided, use them directly
+      if (target.implementations && target.implementations.length > 0) {
+        if (target.implementations.length === 1) {
+          const impl = target.implementations[0];
+          await commands.executeCommand('vscode.open', impl.uri, { selection: impl.range });
+        } else {
+          await commands.executeCommand('editor.action.showReferences', document.uri, target.position, target.implementations.map(i => new Location(i.uri, i.range)));
+          const disposable = window.onDidChangeActiveTextEditor(() => {
+            commands.executeCommand('closeReferenceSearch');
+            disposable.dispose();
+          });
+        }
+        return;
+      }
       
       const language = document.languageId;
       if (language === 'java') {
