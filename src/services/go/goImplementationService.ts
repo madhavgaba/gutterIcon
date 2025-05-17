@@ -8,8 +8,8 @@ export class GoImplementationService {
     const goFiles = await workspace.findFiles(filePattern);
     
     // Get the current document to find the interface/method name
-    const document = await workspace.openTextDocument(documentUri);
-    const line = document.lineAt(position.line).text;
+    const currentDoc = await workspace.openTextDocument(documentUri);
+    const line = currentDoc.lineAt(position.line).text;
     const patterns = LANGUAGE_PATTERNS['go'];
     
     // Check if we're on an interface definition or method
@@ -21,8 +21,8 @@ export class GoImplementationService {
       // Get all methods in the interface
       const interfaceMethods = new Set<string>();
       let inInterfaceBlock = true;
-      for (let i = position.line + 1; i < document.lineCount; i++) {
-        const lineText = document.lineAt(i).text;
+      for (let i = position.line + 1; i < currentDoc.lineCount; i++) {
+        const lineText = currentDoc.lineAt(i).text;
         if (/^\s*}\s*$/.test(lineText)) {
           break;
         }
@@ -35,13 +35,15 @@ export class GoImplementationService {
       // Search for structs that implement this interface
       for (const file of goFiles) {
         try {
-          const doc = await workspace.openTextDocument(file);
+          const data = await workspace.fs.readFile(file);
+          const content = Buffer.from(data).toString('utf8');
+          const lines = content.split(/\r?\n/);
           let structMethods = new Set<string>();
           let currentStruct = '';
           let structStartLine = -1;
           
-          for (let i = 0; i < doc.lineCount; i++) {
-            const lineText = doc.lineAt(i).text;
+          for (let i = 0; i < lines.length; i++) {
+            const lineText = lines[i];
             const structMatch = patterns.structDef.exec(lineText);
             
             if (structMatch) {
@@ -58,7 +60,7 @@ export class GoImplementationService {
 
             // Check if we've found all interface methods
             if (structMethods.size > 0 && [...interfaceMethods].every(method => structMethods.has(method))) {
-              const pos = new Position(structStartLine, doc.lineAt(structStartLine).text.indexOf(currentStruct));
+              const pos = new Position(structStartLine, lines[structStartLine].indexOf(currentStruct));
               implementations.push(new Location(file, new Range(pos, pos)));
               break;
             }
@@ -72,9 +74,11 @@ export class GoImplementationService {
       // Search for structs that implement this method
       for (const file of goFiles) {
         try {
-          const doc = await workspace.openTextDocument(file);
-          for (let i = 0; i < doc.lineCount; i++) {
-            const lineText = doc.lineAt(i).text;
+          const data = await workspace.fs.readFile(file);
+          const content = Buffer.from(data).toString('utf8');
+          const lines = content.split(/\r?\n/);
+          for (let i = 0; i < lines.length; i++) {
+            const lineText = lines[i];
             const methodMatch = patterns.methodWithReceiver.exec(lineText);
             if (methodMatch && methodMatch[1] === methodName) {
               const pos = new Position(i, lineText.indexOf(methodName));
