@@ -17,8 +17,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:go",
-    "onLanguage:java"
+    "*"
   ],
   "main": "./dist/extension.js",
   "contributes": {

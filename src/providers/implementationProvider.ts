@@ -1,68 +1,53 @@
 import {
   CodeLens,
-  CodeLensProvider,
   TextDocument,
   CancellationToken,
   Range,
   Position,
-  ProviderResult,
   workspace,
   Uri,
   commands,
   Location,
 } from "vscode";
+import type { CodeLensProvider, ProviderResult } from "vscode";
 import { LANGUAGE_PATTERNS } from '../patterns/languagePatterns';
+import { GoImplementationService } from '../services/go/goImplementationService';
 
-export class ImplementationCodeLensProvider implements CodeLensProvider {
-  // @ts-ignore
+export class ImplementationCodeLensProvider {
+  private goService: GoImplementationService;
+
+  constructor() {
+    this.goService = new GoImplementationService();
+  }
+
   provideCodeLenses(document: TextDocument, token: CancellationToken): ProviderResult<CodeLens[]> {
+    console.log("[CodeJump+] ImplementationCodeLensProvider called for", document.uri.fsPath);
     try {
       const language = document.languageId;
       const patterns = LANGUAGE_PATTERNS[language];
-      
       if (!patterns) return [];
 
-      // For Java, we need to search for implementations in other files
+      // For Java, we need to search for implementations in other files (async)
       if (language === 'java') {
         return this.provideJavaCodeLenses(document, patterns);
       }
 
-      // For Go, use the built-in implementation provider but count implementations
-      return new Promise<CodeLens[]>((resolve) => {
+      // For Go, use our custom implementation service
+      return new Promise<CodeLens[]>(async (resolve) => {
         const codeLenses: CodeLens[] = [];
-        let pendingCount = 0;
-
-        const addCodeLens = async (lineNumber: number, name: string, line: string) => {
-          pendingCount++;
-          const pos = new Position(lineNumber, line.indexOf(name));
-          try {
-            const implementations = await commands.executeCommand<Location[]>('vscode.executeImplementationProvider', document.uri, pos);
-            const count = implementations ? implementations.length : 0;
-            const codeLens = this.createCodeLens(document, lineNumber, name, count);
-            if (codeLens) codeLenses.push(codeLens);
-          } catch (error) {
-            console.error(`Error getting implementations for ${name}:`, error);
-            const codeLens = this.createCodeLens(document, lineNumber, name, 0);
-            if (codeLens) codeLenses.push(codeLens);
-          }
-          pendingCount--;
-          if (pendingCount === 0) {
-            resolve(codeLenses);
-          }
-        };
-
         let inInterfaceBlock = false;
         for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
           const line = document.lineAt(lineNumber).text;
-          
           const defMatch = patterns.interfaceDef.exec(line);
           if (defMatch) {
             const interfaceName = defMatch[1];
-            addCodeLens(lineNumber, interfaceName, line);
+            const pos = new Position(lineNumber, line.indexOf(interfaceName));
+            const implementations = await this.goService.findImplementations(document.uri, pos);
+            const codeLens = this.createCodeLens(document, lineNumber, interfaceName, implementations.length, implementations);
+            if (codeLens) codeLenses.push(codeLens);
             inInterfaceBlock = true;
             continue;
           }
-
           if (inInterfaceBlock) {
             if (/^\s*}\s*$/.test(line)) {
               inInterfaceBlock = false;
@@ -71,19 +56,30 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
             const methodMatch = patterns.interfaceMethod.exec(line);
             if (methodMatch) {
               const methodName = methodMatch[1];
-              addCodeLens(lineNumber, methodName, line);
+              const pos = new Position(lineNumber, line.indexOf(methodName));
+              const implementations = await this.goService.findImplementations(document.uri, pos);
+              const codeLens = this.createCodeLens(document, lineNumber, methodName, implementations.length, implementations);
+              if (codeLens) codeLenses.push(codeLens);
             }
           }
         }
-
-        // If no code lenses were added, resolve immediately
-        if (pendingCount === 0) {
-          resolve(codeLenses);
-        }
+        resolve(codeLenses);
       });
     } catch (error) {
       console.error('Error providing code lenses:', error);
       return [];
+    }
+  }
+
+  private async createGoImplementationCodeLens(document: TextDocument, lineNumber: number, name: string, line: string): Promise<CodeLens | undefined> {
+    const pos = new Position(lineNumber, line.indexOf(name));
+    try {
+      const implementations = await commands.executeCommand<Location[]>('vscode.executeImplementationProvider', document.uri, pos);
+      const count = implementations ? implementations.length : 0;
+      return this.createCodeLens(document, lineNumber, name, count);
+    } catch (error) {
+      console.error(`Error getting implementations for ${name}:`, error);
+      return this.createCodeLens(document, lineNumber, name, 0);
     }
   }
 
@@ -289,19 +285,23 @@ export class ImplementationCodeLensProvider implements CodeLensProvider {
     return implementations;
   }
 
-  private createCodeLens(document: TextDocument, line: number, methodName: string, implementationCount: number, locations?: { uri: Uri, range: Range }[]): CodeLens | undefined {
+  private createCodeLens(document: TextDocument, line: number, methodName: string, implementationCount: number, implementations?: Location[]): CodeLens | undefined {
     const lineText = document.lineAt(line).text;
     const methodIndex = lineText.indexOf(methodName);
     if (methodIndex === -1) {
-      console.log(`Warning: Could not find method name "${methodName}" in line: ${lineText}`);
+      console.log(`[CodeJump+] Could not find method name "${methodName}" in line: ${lineText}`);
       return undefined;
     }
     const pos = new Position(line, methodIndex);
-    console.log(`Creating CodeLens for ${methodName} at line ${line}`);
-    const args: any = { position: pos, methodName };
-    if (locations && locations.length > 0) {
-      args.implementations = locations;
-    }
+    console.log(`[CodeJump+] Creating CodeLens for ${methodName} at line ${line}`);
+    const args: any = { 
+      position: pos, 
+      methodName,
+      implementations: implementations?.map(impl => ({
+        uri: impl.uri,
+        range: impl.range
+      }))
+    };
     return new CodeLens(new Range(pos, pos), {
       title: `$(symbol-method) ${implementationCount} implementation${implementationCount !== 1 ? 's' : ''}`,
       command: "extension.goToImplementation",

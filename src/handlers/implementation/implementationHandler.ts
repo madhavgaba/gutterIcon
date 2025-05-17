@@ -1,14 +1,11 @@
 import { commands, window, Location, Uri, Position } from 'vscode';
 import { ImplementationTarget } from '../../models/types';
-import { JavaImplementationService } from '../../services/java/javaImplementationService';
 import { GoImplementationService } from '../../services/go/goImplementationService';
 
 export class ImplementationHandler {
-  private javaService: JavaImplementationService;
   private goService: GoImplementationService;
 
   constructor() {
-    this.javaService = new JavaImplementationService();
     this.goService = new GoImplementationService();
   }
 
@@ -17,9 +14,18 @@ export class ImplementationHandler {
     if (!document) return;
 
     const language = document.languageId;
-    const implementations = language === 'java' 
-      ? await this.javaService.findImplementations(target)
-      : await this.goService.findImplementations(document.uri, target.position);
+    let implementations: Location[] = [];
+
+    if (language === 'go') {
+      implementations = await this.goService.findImplementations(document.uri, target.position);
+    } else {
+      // For Java, use the existing implementations from the CodeLens
+      if (target.implementations) {
+        implementations = target.implementations.map(impl => 
+          new Location(impl.uri, impl.range)
+        );
+      }
+    }
 
     if (implementations && implementations.length > 0) {
       await this.navigateToImplementations(implementations, document.uri, target.position);
@@ -45,6 +51,8 @@ export class ImplementationHandler {
         position,
         implementations
       );
+      
+      // Close references view when editor changes
       const disposable = window.onDidChangeActiveTextEditor(() => {
         commands.executeCommand('closeReferenceSearch');
         disposable.dispose();

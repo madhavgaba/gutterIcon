@@ -11,9 +11,10 @@ import {
 } from "vscode";
 import { LANGUAGE_PATTERNS } from '../patterns/languagePatterns';
 
-export class InterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
+export class InterfaceCodeLensProvider {
     // @ts-ignore
   provideCodeLenses(document: TextDocument, token: CancellationToken): ProviderResult<CodeLens[]> {
+    console.log("[CodeJump+] InterfaceCodeLensProvider called for", document.uri.fsPath);
     const codeLenses: CodeLens[] = [];
     const language = document.languageId;
     const patterns = LANGUAGE_PATTERNS[language];
@@ -190,6 +191,12 @@ export class InterfaceCodeLensProvider implements CodeLensProvider<CodeLens> {
     if (interfaceLocations.length > 0) {
       const methodIndex = document.lineAt(line).text.indexOf(methodName);
       const methodPos = new Position(line, methodIndex);
+      
+      if (methodIndex === -1) {
+        console.log(`[CodeJump+] Could not find method name "${methodName}" in line: ${document.lineAt(line).text}`);
+        return codeLenses;
+      }
+      console.log(`[CodeJump+] Creating CodeLens for ${methodName} at line ${line}`);
       
       if (interfaceLocations.length === 1) {
         // For single interface, pass location and file directly
