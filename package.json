@@ -2,7 +2,7 @@
   "name": "codejump",
   "displayName": "CodeJump+",
   "description": "Adds a clickable CodeLens for 'Go to Implementation' above interface methods in Go files.",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "publisher": "MadhavGaba",
   "license": "MIT",
   "icon": "./media/icon.png",
@@ -17,7 +17,8 @@
     "Other"
   ],
   "activationEvents": [
-    "*"
+    "onLanguage:go",
+    "onLanguage:java"
   ],
   "main": "./dist/extension.js",
   "contributes": {
