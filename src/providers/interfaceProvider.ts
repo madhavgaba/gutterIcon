@@ -10,11 +10,19 @@ import {
   Uri,
 } from "vscode";
 import { LANGUAGE_PATTERNS } from '../patterns/languagePatterns';
+import { isPathAllowed } from '../utils/pathUtils';
 
 export class InterfaceCodeLensProvider {
     // @ts-ignore
   provideCodeLenses(document: TextDocument, token: CancellationToken): ProviderResult<CodeLens[]> {
     console.log("[CodeJump+] InterfaceCodeLensProvider called for", document.uri.fsPath);
+    
+    // Check if the file path is allowed
+    if (!isPathAllowed(document.uri.fsPath)) {
+      console.log("[CodeJump+] File path not allowed:", document.uri.fsPath);
+      return [];
+    }
+
     const codeLenses: CodeLens[] = [];
     const language = document.languageId;
     const patterns = LANGUAGE_PATTERNS[language];

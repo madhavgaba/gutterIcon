@@ -16,6 +16,7 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 - **Quick Navigation**: Click on CodeLens indicators to navigate between interfaces and their implementations
 - **Multi-language Support**: Works with both Go and Java files
 - **Real-time Updates**: Updates implementation indicators as you type
+- **Path-based Filtering**: Configure specific paths where CodeLens should be shown
 
 ## Requirements
 
@@ -30,6 +31,18 @@ A Visual Studio Code extension that provides enhanced implementation detection a
 4. Click Install
 
 ## Usage
+
+### Configuration
+
+You can configure which paths should show CodeLens indicators:
+
+1. Open VS Code Settings (Ctrl+, or Cmd+,)
+2. Search for "CodeJump"
+3. Under "CodeJump+: Allowed Paths", add glob patterns for paths where you want CodeLens to appear
+   - Example: `["src/**/*.go", "pkg/**/*.java"]`
+   - You must specify at least one path pattern for the extension to work
+   - Use `**` for recursive directory matching
+   - Use `*` for single directory/file matching
 
 ### For Go Files
 

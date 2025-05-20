@@ -12,6 +12,7 @@ import {
 import type { CodeLensProvider, ProviderResult } from "vscode";
 import { LANGUAGE_PATTERNS } from '../patterns/languagePatterns';
 import { GoImplementationService } from '../services/go/goImplementationService';
+import { isPathAllowed } from '../utils/pathUtils';
 
 export class ImplementationCodeLensProvider {
   private goService: GoImplementationService;
@@ -22,6 +23,13 @@ export class ImplementationCodeLensProvider {
 
   provideCodeLenses(document: TextDocument, token: CancellationToken): ProviderResult<CodeLens[]> {
     console.log("[CodeJump+] ImplementationCodeLensProvider called for", document.uri.fsPath);
+    
+    // Check if the file path is allowed
+    if (!isPathAllowed(document.uri.fsPath)) {
+      console.log("[CodeJump+] File path not allowed:", document.uri.fsPath);
+      return [];
+    }
+
     try {
       const language = document.languageId;
       const patterns = LANGUAGE_PATTERNS[language];
