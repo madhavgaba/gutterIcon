@@ -1,21 +1,22 @@
 {
-  "compilerOptions": {
-    "module": "commonjs",
-    "target": "es6",
-    "lib": [
-      "es6",
-      "dom"
-    ],
-    "outDir": "dist",
-    "sourceMap": true,
-    "rootDir": "src",
-    "strict": true,
-    "noImplicitAny": true,
-    "moduleResolution": "node",
-    "skipLibCheck": true
-  },
-  "exclude": [
-    "node_modules",
-    ".vscode-test"
-  ]
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "ES2020",
+        "outDir": "dist",
+        "lib": [
+            "ES2020"
+        ],
+        "sourceMap": true,
+        "rootDir": "src",
+        "strict": true,
+        "types": [
+            "node",
+            "vscode"
+        ],
+        "skipLibCheck": true
+    },
+    "exclude": [
+        "node_modules",
+        ".vscode-test"
+    ]
 }

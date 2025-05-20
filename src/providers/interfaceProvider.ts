@@ -8,18 +8,74 @@ import {
   ProviderResult,
   workspace,
   Uri,
+  Disposable,
+  FileSystemWatcher,
 } from "vscode";
 import { LANGUAGE_PATTERNS } from '../patterns/languagePatterns';
 import { isPathAllowed } from '../utils/pathUtils';
 
-export class InterfaceCodeLensProvider {
-    // @ts-ignore
+interface CacheEntry {
+  timestamp: number;
+  data: any;
+}
+
+export class InterfaceCodeLensProvider implements Disposable {
+  private cache: Map<string, CacheEntry> = new Map();
+  private cacheTimeout = 30000; // 30 seconds
+  private fileWatcher: FileSystemWatcher | undefined;
+  private lastScanTime: number = 0;
+  private scanCooldown = 5000; // 5 seconds between full scans
+
+  constructor() {
+    this.setupFileWatcher();
+  }
+
+  private setupFileWatcher() {
+    // Watch for file changes to invalidate cache
+    this.fileWatcher = workspace.createFileSystemWatcher('**/*.{go,java}');
+    this.fileWatcher.onDidChange((uri) => {
+      if (isPathAllowed(uri.fsPath)) {
+        this.invalidateCache();
+      }
+    });
+    this.fileWatcher.onDidCreate((uri) => {
+      if (isPathAllowed(uri.fsPath)) {
+        this.invalidateCache();
+      }
+    });
+    this.fileWatcher.onDidDelete((uri) => {
+      if (isPathAllowed(uri.fsPath)) {
+        this.invalidateCache();
+      }
+    });
+  }
+
+  private invalidateCache() {
+    this.cache.clear();
+  }
+
+  private getCached<T>(key: string): T | undefined {
+    const entry = this.cache.get(key);
+    if (entry && Date.now() - entry.timestamp < this.cacheTimeout) {
+      return entry.data as T;
+    }
+    return undefined;
+  }
+
+  private setCache<T>(key: string, data: T) {
+    this.cache.set(key, {
+      timestamp: Date.now(),
+      data
+    });
+  }
+
   provideCodeLenses(document: TextDocument, token: CancellationToken): ProviderResult<CodeLens[]> {
-    console.log("[CodeJump+] InterfaceCodeLensProvider called for", document.uri.fsPath);
-    
-    // Check if the file path is allowed
+    if (token.isCancellationRequested) {
+      return [];
+    }
+
+    // Early return if path is not allowed
     if (!isPathAllowed(document.uri.fsPath)) {
-      console.log("[CodeJump+] File path not allowed:", document.uri.fsPath);
       return [];
     }
 
@@ -29,10 +85,32 @@ export class InterfaceCodeLensProvider {
     
     if (!patterns) return codeLenses;
 
+    // Check cache first
+    const cacheKey = `interface_${document.uri.toString()}`;
+    const cached = this.getCached<CodeLens[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     return (async () => {
+      // Check if we need to do a full scan
+      const now = Date.now();
+      if (now - this.lastScanTime < this.scanCooldown) {
+        const cached = this.getCached<CodeLens[]>(cacheKey);
+        if (cached) return cached;
+      }
+
       const filePattern = language === 'go' ? '**/*.go' : '**/*.java';
-      const goFiles = await workspace.findFiles(filePattern);
-      const interfaces = await this.collectInterfaces(goFiles, language);
+      // Only scan allowed paths
+      const files = await workspace.findFiles(filePattern, '**/node_modules/**', 1000);
+      const allowedFiles = files.filter(file => isPathAllowed(file.fsPath));
+      
+      if (allowedFiles.length === 0) {
+        return codeLenses;
+      }
+
+      const interfaces = await this.collectInterfaces(allowedFiles, language);
+      this.setCache('interfaces', interfaces);
 
       for (let i = 0; i < document.lineCount; i++) {
         const lineText = document.lineAt(i).text;
@@ -40,29 +118,40 @@ export class InterfaceCodeLensProvider {
         // Struct/Class detection
         const structMatch = patterns.structDef.exec(lineText);
         if (structMatch) {
-          const lenses = await this.processStruct(document, i, structMatch[1], interfaces, goFiles, language);
+          const lenses = await this.processStruct(document, i, structMatch[1], interfaces, allowedFiles, language);
           codeLenses.push(...lenses);
         }
 
         // Method detection
         const methodMatch = patterns.methodWithReceiver.exec(lineText);
         if (methodMatch) {
-          const lenses = await this.processMethod(document, i, methodMatch[1], interfaces, goFiles, language);
+          const lenses = await this.processMethod(document, i, methodMatch[1], interfaces, allowedFiles, language);
           codeLenses.push(...lenses);
         }
       }
 
+      this.lastScanTime = now;
+      this.setCache(cacheKey, codeLenses);
       return codeLenses;
     })();
   }
 
-  private async collectInterfaces(goFiles: Uri[], language: string): Promise<Map<string, Set<string>>> {
+  private async collectInterfaces(files: Uri[], language: string): Promise<Map<string, Set<string>>> {
+    // Check cache first
+    const cacheKey = `interfaces_${language}`;
+    const cached = this.getCached<Map<string, Set<string>>>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const interfaces = new Map<string, Set<string>>();
     const patterns = LANGUAGE_PATTERNS[language];
 
-    for (const file of goFiles) {
+    for (const file of files) {
+      if (!isPathAllowed(file.fsPath)) {
+        continue;
+      }
       try {
-        // Use fs.readFile for efficiency
         const data = await workspace.fs.readFile(file);
         const content = Buffer.from(data).toString('utf8');
         const lines = content.split(/\r?\n/);
@@ -95,6 +184,8 @@ export class InterfaceCodeLensProvider {
         console.error(`Error reading file ${file.fsPath}:`, error);
       }
     }
+
+    this.setCache(cacheKey, interfaces);
     return interfaces;
   }
 
@@ -103,7 +194,7 @@ export class InterfaceCodeLensProvider {
     line: number,
     structName: string,
     interfaces: Map<string, Set<string>>,
-    goFiles: Uri[],
+    files: Uri[],
     language: string
   ): Promise<CodeLens[]> {
     const patterns = LANGUAGE_PATTERNS[language];
@@ -135,7 +226,7 @@ export class InterfaceCodeLensProvider {
       );
     }
 
-    return this.createInterfaceCodeLenses(document, line, structName, matchingInterfaces, goFiles, language);
+    return this.createInterfaceCodeLenses(document, line, structName, matchingInterfaces, files, language);
   }
 
   private async processMethod(
@@ -143,12 +234,12 @@ export class InterfaceCodeLensProvider {
     line: number,
     methodName: string,
     interfaces: Map<string, Set<string>>,
-    goFiles: Uri[],
+    files: Uri[],
     language: string
   ): Promise<CodeLens[]> {
     for (const [interfaceName, methods] of interfaces) {
       if (methods.has(methodName)) {
-        return this.createInterfaceCodeLenses(document, line, methodName, [[interfaceName, methods]], goFiles, language);
+        return this.createInterfaceCodeLenses(document, line, methodName, [[interfaceName, methods]], files, language);
       }
     }
     return [];
@@ -159,7 +250,7 @@ export class InterfaceCodeLensProvider {
     line: number,
     methodName: string,
     matchingInterfaces: [string, Set<string>][],
-    goFiles: Uri[],
+    files: Uri[],
     language: string
   ): Promise<CodeLens[]> {
     const codeLenses: CodeLens[] = [];
@@ -169,9 +260,11 @@ export class InterfaceCodeLensProvider {
     
     // First collect all interface locations
     for (const [interfaceName] of matchingInterfaces) {
-      for (const file of goFiles) {
+      for (const file of files) {
+        if (!isPathAllowed(file.fsPath)) {
+          continue;
+        }
         try {
-          // Use fs.readFile for efficiency
           const data = await workspace.fs.readFile(file);
           const content = Buffer.from(data).toString('utf8');
           const lines = content.split(/\r?\n/);
@@ -201,10 +294,8 @@ export class InterfaceCodeLensProvider {
       const methodPos = new Position(line, methodIndex);
       
       if (methodIndex === -1) {
-        console.log(`[CodeJump+] Could not find method name "${methodName}" in line: ${document.lineAt(line).text}`);
         return codeLenses;
       }
-      console.log(`[CodeJump+] Creating CodeLens for ${methodName} at line ${line}`);
       
       if (interfaceLocations.length === 1) {
         // For single interface, pass location and file directly
@@ -242,5 +333,10 @@ export class InterfaceCodeLensProvider {
     }
     
     return codeLenses;
+  }
+
+  dispose() {
+    this.fileWatcher?.dispose();
+    this.cache.clear();
   }
 } 

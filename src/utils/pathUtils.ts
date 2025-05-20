@@ -1,6 +1,6 @@
 import { workspace } from 'vscode';
 import * as path from 'path';
-import * as minimatch from 'minimatch';
+import { minimatch } from 'minimatch';
 
 export function isPathAllowed(filePath: string): boolean {
     const config = workspace.getConfiguration('codejump');
