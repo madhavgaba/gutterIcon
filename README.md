@@ -44,6 +44,25 @@ You can configure which paths should show CodeLens indicators:
    - Use `**` for recursive directory matching
    - Use `*` for single directory/file matching
 
+Common path patterns:
+```json
+{
+    "codejump.allowedPaths": [
+        "**/*.go",           // All Go files in any directory
+        "src/**/*.go",       // All Go files in src directory and subdirectories
+        "pkg/*.go",          // All Go files directly in pkg directory
+        "internal/**/*",     // All files in internal directory and subdirectories
+        "*.java",            // All Java files in root directory
+        "src/controllers/*.go" // All Go files in src/controllers directory
+    ]
+}
+```
+
+Common pitfalls to avoid:
+- Don't use leading `/` in patterns (e.g., use `**/*.go` instead of `/**/*.go`)
+- Don't use absolute paths (e.g., use `src/**/*.go` instead of `/Users/name/project/src/**/*.go`)
+- Don't use Windows-style backslashes (e.g., use `src/**/*.go` instead of `src\**\*.go`)
+
 ### For Go Files
 
 1. Open a Go file containing an interface
