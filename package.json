@@ -77,23 +77,34 @@
     ]
   },
   "scripts": {
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "compile": "webpack --mode production",
+    "watch": "webpack --mode development --watch",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run compile"
   },
   "dependencies": {
-    "minimatch": "^9.0.3"
+    "minimatch": "^5.1.6"
   },
   "devDependencies": {
+    "@types/minimatch": "^5.1.2",
     "@types/node": "^22.15.19",
     "@types/vscode": "^1.75.0",
     "@vscode/vsce": "^2.15.0",
+    "ts-loader": "^9.5.1",
     "typescript": "^4.9.5",
-    "vscode": "^1.1.37"
+    "vscode": "^1.1.37",
+    "webpack": "^5.90.3",
+    "webpack-cli": "^5.1.4"
   },
   "files": [
-    "dist",
-    "media",
+    "dist/**/*",
+    "media/**/*",
     "LICENSE.txt"
+  ],
+  "bundledDependencies": [
+    "minimatch"
+  ],
+  "bundleDependencies": [
+    "minimatch"
   ]
 }

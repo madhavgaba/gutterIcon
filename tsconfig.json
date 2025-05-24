@@ -4,16 +4,13 @@
         "target": "ES2020",
         "outDir": "dist",
         "lib": [
-            "ES2020",
-            "DOM"
+            "ES2020"
         ],
         "sourceMap": true,
         "rootDir": "src",
         "strict": true,
-        "types": [
-            "node",
-            "vscode"
-        ],
+        "moduleResolution": "node",
+        "esModuleInterop": true,
         "skipLibCheck": true
     },
     "exclude": [

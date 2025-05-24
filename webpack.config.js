@@ -28,5 +28,5 @@ module.exports = {
       }
     ]
   },
-  devtool: 'nosources-source-map'
+  devtool: 'source-map'
 }; 

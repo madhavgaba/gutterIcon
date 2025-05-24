@@ -1,6 +1,20 @@
-import { workspace } from 'vscode';
+import { workspace, ConfigurationChangeEvent } from 'vscode';
 import * as path from 'path';
-const minimatch = require('minimatch');
+import * as minimatch from 'minimatch';
+
+// Cache for compiled patterns
+let compiledPatterns: minimatch.Minimatch[] | null = null;
+let lastConfigValue: string[] | null = null;
+
+// Function to compile patterns
+function compilePatterns(patterns: string[]): minimatch.Minimatch[] {
+    return patterns.map(pattern => new minimatch.Minimatch(pattern));
+}
+
+// Function to get current workspace root
+function getWorkspaceRoot(): string {
+    return workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+}
 
 export function isPathAllowed(filePath: string): boolean {
     const config = workspace.getConfiguration('codejump');
@@ -12,30 +26,36 @@ export function isPathAllowed(filePath: string): boolean {
         workspaceFolders: workspace.workspaceFolders?.map(f => f.uri.fsPath)
     });
     
-    // If no paths are specified, don't allow anything
-    if (allowedPaths.length === 0) {
-        console.log('[CodeJump+] No paths specified, denying access');
-        return false;
+    // Early return if no paths are specified
+    if (!allowedPaths || allowedPaths.length === 0) {
+        return true;
     }
 
-    // Convert file path to workspace-relative path
-    const workspaceFolders = workspace.workspaceFolders;
-    if (!workspaceFolders) {
-        console.log('[CodeJump+] No workspace folders found');
-        return false;
+    // Check if config has changed
+    if (lastConfigValue === null || JSON.stringify(lastConfigValue) !== JSON.stringify(allowedPaths)) {
+        compiledPatterns = compilePatterns(allowedPaths);
+        lastConfigValue = allowedPaths;
     }
 
-    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+    // Get relative path
+    const workspaceRoot = getWorkspaceRoot();
+    if (!workspaceRoot) {
+        return false; // No workspace root, don't process
+    }
+
     const relativePath = path.relative(workspaceRoot, filePath);
-    console.log('[CodeJump+] Relative path:', relativePath);
+    if (!relativePath) {
+        return false; // Path is not in workspace
+    }
 
-    // Check if the path matches any of the allowed patterns
-    const isAllowed = allowedPaths.some(pattern => {
-        const matches = minimatch(relativePath, pattern);
-        console.log(`[CodeJump+] Checking pattern "${pattern}": ${matches}`);
-        return matches;
-    });
+    // Check against compiled patterns
+    return compiledPatterns!.some(pattern => pattern.match(relativePath));
+}
 
-    console.log('[CodeJump+] Final result:', isAllowed);
-    return isAllowed;
+// Reset cache when configuration changes
+export function resetCache(event: ConfigurationChangeEvent) {
+    if (event.affectsConfiguration('codejump.allowedPaths')) {
+        compiledPatterns = null;
+        lastConfigValue = null;
+    }
 } 
